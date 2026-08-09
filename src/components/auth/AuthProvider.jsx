@@ -1,0 +1,125 @@
+import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '../../supabase'
+import { AuthContext } from '../../utils/authContext'
+
+async function fetchProfile(userId) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .single()
+
+  if (error && error.code !== 'PGRST116') throw error
+  return data
+    ? {
+        ...data,
+        displayName: data.display_name,
+        walletBalance: data.wallet_balance,
+      }
+    : null
+}
+
+export function AuthProvider({ children }) {
+  const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const user = session?.user || null
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      setLoading(false)
+    })
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession)
+      setLoading(false)
+    })
+
+    return () => data.subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setProfile(null)
+      return undefined
+    }
+
+    let active = true
+    fetchProfile(user.id).then((nextProfile) => {
+      if (active) setProfile(nextProfile)
+    })
+
+    const channel = supabase
+      .channel(`profile:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) =>
+          setProfile({
+            ...payload.new,
+            displayName: payload.new.display_name,
+            walletBalance: payload.new.wallet_balance,
+          }),
+      )
+      .subscribe()
+
+    return () => {
+      active = false
+      supabase.removeChannel(channel)
+    }
+  }, [user])
+
+  const refreshProfile = async () => {
+    if (!user) return
+    const nextProfile = await fetchProfile(user.id)
+    setProfile(nextProfile)
+  }
+
+  const value = useMemo(
+    () => ({
+      isAdmin: ['owner', 'staff'].includes(profile?.role),
+      isOwner: profile?.role === 'owner',
+      loading,
+      profile,
+      refreshProfile,
+      signInWithGoogle: async () => {
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin },
+        })
+        if (error) throw error
+        return data
+      },
+      signInWithPassword: async (email, password) => {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+        if (error) throw error
+        return data
+      },
+      signOutUser: () => supabase.auth.signOut(),
+      signUpWithPassword: async ({ displayName, email, password }) => {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { display_name: displayName } },
+        })
+        if (error) throw error
+        return data
+      },
+      user,
+    }),
+    [loading, profile, user],
+  )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
