@@ -713,7 +713,13 @@ export function AdminOrdersPage() {
                       </p>
                       <p className="text-xs text-neutral-500 mt-0.5">
                         Amount: <strong className="text-emerald-600">{formatCurrency(inspectTarget.payment?.amountMmk || inspectTarget.totalMmk || inspectTarget.amountMmk)}</strong>
+                        {inspectTarget.totalUsd > 0 && (
+                          <span className="ml-2 font-mono text-neutral-400">
+                            (${inspectTarget.totalUsd.toFixed(2)} USD @ {inspectTarget.exchangeRateUsed || 4500} MMK/USD)
+                          </span>
+                        )}
                       </p>
+
                     </div>
 
                     {/* Screenshot Preview */}

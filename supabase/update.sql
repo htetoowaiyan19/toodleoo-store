@@ -4,7 +4,7 @@
 -- https://supabase.com/dashboard/project/_/sql/new
 -- ================================================================================================================
 
--- 1. ADD PRODUCT_TYPE & REQUIRED_FIELDS COLUMNS TO PRODUCTS TABLE IF NOT EXISTS
+-- 1. ADD PRODUCT_TYPE & REQUIRED_FIELDS & PRICE_USD COLUMNS TO PRODUCTS TABLE IF NOT EXISTS
 do $$
 begin
   if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='products' and column_name='product_type') then
@@ -14,8 +14,35 @@ begin
   if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='products' and column_name='required_fields') then
     alter table public.products add column required_fields jsonb not null default '[]'::jsonb;
   end if;
+
+  if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='products' and column_name='price_usd') then
+    alter table public.products add column price_usd numeric(10,2) not null default 0.00 check (price_usd >= 0);
+  end if;
 end $$;
 
+-- STORE SETTINGS TABLE (EXCHANGE RATES & APP CONFIG)
+create table if not exists public.store_settings (
+  key text primary key,
+  value text not null,
+  updated_at timestamp with time zone not null default now()
+);
+
+alter table public.store_settings enable row level security;
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where policyname = 'Store settings readable by all') then
+    create policy "Store settings readable by all" on public.store_settings for select using (true);
+  end if;
+
+  if not exists (select 1 from pg_policies where policyname = 'Admins full access to store settings') then
+    create policy "Admins full access to store settings" on public.store_settings for all using (public.is_admin());
+  end if;
+end $$;
+
+insert into public.store_settings (key, value)
+values ('usd_to_mmk_rate', '4500'), ('last_auto_sync_at', now()::text)
+on conflict (key) do nothing;
 
 -- 2. CREATE ITEMS TABLE
 create table if not exists public.items (
@@ -23,11 +50,28 @@ create table if not exists public.items (
   product_id uuid not null references public.products(id) on delete cascade,
   name text not null default '',
   price_mmk integer not null check (price_mmk >= 0),
+  price_usd numeric(10,2) not null default 0.00 check (price_usd >= 0),
   stock integer not null check (stock >= 0) default 0,
   status text not null check (status in ('instock', 'pre-order', 'out-of-stock')) default 'instock',
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='items' and column_name='price_usd') then
+    alter table public.items add column price_usd numeric(10,2) not null default 0.00 check (price_usd >= 0);
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='orders' and column_name='total_usd') then
+    alter table public.orders add column total_usd numeric(10,2) not null default 0.00;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='orders' and column_name='exchange_rate_used') then
+    alter table public.orders add column exchange_rate_used numeric(10,2) not null default 4500.00;
+  end if;
+end $$;
+
 
 -- Enable RLS on Items Table
 alter table public.items enable row level security;
@@ -224,7 +268,7 @@ end;
 $$;
 
 
--- 6. CREATE ORDER FROM CART RPC FUNCTION WITH ITEMS SUPPORT
+-- 6. CREATE ORDER FROM CART RPC FUNCTION WITH USD BASE PRICING & Dynamic MMK Verification
 create or replace function public.create_order_from_cart(
   cart_items jsonb,
   payment_source_input text,
@@ -242,16 +286,21 @@ declare
   item_uuid uuid;
   current_stock integer;
   item_status text;
-  item_price integer;
+  item_price_mmk integer;
+  item_price_usd numeric(10,2);
   prod_name text;
   current_wallet integer;
   qty integer;
-  item_total integer;
+  item_total_mmk integer;
+  item_total_usd numeric(10,2);
   server_subtotal_mmk integer := 0;
+  server_subtotal_usd numeric(10,2) := 0.00;
   final_total_mmk integer := 0;
   discount_amount_mmk integer := 0;
   coupon_validation jsonb;
   coupon_id_val uuid;
+  current_rate numeric(10,2) := 4500.00;
+  rate_setting text;
 begin
   if auth.uid() is null then
     raise exception 'Sign in required';
@@ -263,6 +312,12 @@ begin
 
   if payment_source_input not in ('wallet', 'manual_payment') then
     raise exception 'Invalid payment source';
+  end if;
+
+  -- 0. Fetch current active exchange rate from store_settings
+  select value into rate_setting from public.store_settings where key = 'usd_to_mmk_rate';
+  if rate_setting is not null and rate_setting ~ '^[0-9]+(\.[0-9]+)?$' then
+    current_rate := rate_setting::numeric;
   end if;
 
   -- 1. Calculate base subtotal & verify stock from public.items table
@@ -278,8 +333,8 @@ begin
     if item_id_text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
       item_uuid := item_id_text::uuid;
 
-      select i.stock, i.status, i.price_mmk, p.name
-      into current_stock, item_status, item_price, prod_name
+      select i.stock, i.status, i.price_usd, i.price_mmk, p.name
+      into current_stock, item_status, item_price_usd, item_price_mmk, prod_name
       from public.items i
       join public.products p on p.id = i.product_id
       where i.id = item_uuid
@@ -291,12 +346,29 @@ begin
         end if;
       end if;
 
-      item_total := coalesce(item_price, (item->>'priceMmk')::integer, 0) * qty;
+      if item_price_usd is null or item_price_usd = 0.00 then
+        if item_price_mmk is not null and item_price_mmk > 0 then
+          item_price_usd := round((item_price_mmk / current_rate)::numeric, 2);
+        else
+          item_price_usd := coalesce((item->>'priceUsd')::numeric, (item->>'price_usd')::numeric, 0.00);
+        end if;
+      end if;
+
+      item_price_mmk := round(item_price_usd * current_rate);
+      item_total_mmk := item_price_mmk * qty;
+      item_total_usd := item_price_usd * qty;
     else
-      item_total := coalesce((item->>'priceMmk')::integer, 0) * qty;
+      item_price_usd := coalesce((item->>'priceUsd')::numeric, (item->>'price_usd')::numeric, 0.00);
+      item_price_mmk := round(item_price_usd * current_rate);
+      if item_price_mmk = 0 then
+        item_price_mmk := coalesce((item->>'priceMmk')::integer, 0);
+      end if;
+      item_total_mmk := item_price_mmk * qty;
+      item_total_usd := item_price_usd * qty;
     end if;
 
-    server_subtotal_mmk := server_subtotal_mmk + item_total;
+    server_subtotal_mmk := server_subtotal_mmk + item_total_mmk;
+    server_subtotal_usd := server_subtotal_usd + item_total_usd;
   end loop;
 
   final_total_mmk := server_subtotal_mmk;
@@ -336,6 +408,8 @@ begin
     user_email,
     items,
     total_mmk,
+    total_usd,
+    exchange_rate_used,
     payment_source,
     status,
     is_submitted
@@ -345,11 +419,14 @@ begin
     coalesce((select email from public.profiles where id = auth.uid()), auth.jwt()->>'email', 'customer@toodleoo.store'),
     cart_items,
     final_total_mmk,
+    server_subtotal_usd,
+    current_rate,
     payment_source_input,
     case when payment_source_input = 'wallet' then 'paid' else 'pending_payment' end,
     case when payment_source_input = 'wallet' then true else false end
   )
   returning id into order_id;
+
 
   -- 5. Record Coupon Redemption & Increment Coupon Usage
   if coupon_id_val is not null then

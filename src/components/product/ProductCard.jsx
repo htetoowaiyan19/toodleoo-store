@@ -102,13 +102,19 @@ export function ProductCard({ product }) {
 
       <div className="p-3 sm:p-5 pt-0">
         <div className="border-t border-black/5 pt-2.5 sm:pt-4 dark:border-white/5">
-          <div className="flex flex-wrap items-baseline gap-1">
+          <div className="flex flex-col">
             <span className="text-xs sm:text-xl font-black font-mono">
               {isRange
                 ? formatPriceRange(minPrice, maxPrice)
                 : formatCurrency(minPrice)}
             </span>
+            {product.priceUsd > 0 && (
+              <span className="text-[10px] sm:text-xs font-bold text-neutral-400">
+                (${product.priceUsd.toFixed(2)} USD)
+              </span>
+            )}
           </div>
+
 
           {/* ACTION BUTTONS */}
           <div className="mt-2 sm:mt-3.5">

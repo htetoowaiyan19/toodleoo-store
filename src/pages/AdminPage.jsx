@@ -31,6 +31,20 @@ export function AdminPage({ defaultTab }) {
     else if (tabId === 'discounts') navigate('/admin/discounts', { replace: true })
   }
 
+  const { exchangeRate, triggerMarketRateSync, lastSyncedAt } = useProducts()
+  const [syncingRate, setSyncingRate] = useState(false)
+
+  async function handleManualSync() {
+    setSyncingRate(true)
+    try {
+      await triggerMarketRateSync()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSyncingRate(false)
+    }
+  }
+
   return (
     <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
       {/* ADMIN HUB TOP NAVIGATION HEADER */}
@@ -40,7 +54,23 @@ export function AdminPage({ defaultTab }) {
             Store Operations & Admin Hub
           </p>
           <h1 className="mt-1 text-3xl font-black">Store Administration</h1>
+
+          {/* LIVE EXCHANGE RATE STATUS BADGE */}
+          <div className="mt-2.5 flex items-center gap-2 text-xs font-bold text-neutral-600 dark:text-neutral-300">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#0b7e74]/15 px-3 py-1 text-xs font-black text-[#0b7e74]">
+              ⚡ Live Market Rate: 1 USD = {exchangeRate?.toLocaleString()} MMK
+            </span>
+            <button
+              type="button"
+              onClick={handleManualSync}
+              disabled={syncingRate}
+              className="cursor-pointer text-[11px] font-bold text-[#0b7e74] hover:underline disabled:opacity-50"
+            >
+              {syncingRate ? 'Syncing...' : 'Sync P2P Rate Now ↻'}
+            </button>
+          </div>
         </div>
+
 
         {/* SUB-TABS SELECTOR */}
         <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-black/10 bg-neutral-100 p-1.5 dark:border-white/10 dark:bg-neutral-800">

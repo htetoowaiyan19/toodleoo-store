@@ -152,11 +152,17 @@ export function ProductPage() {
           </div>
         )}
 
-        <div className="mt-6 flex items-end gap-3">
-          <span className="text-4xl font-black">
+        <div className="mt-6 flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-3">
+          <span className="text-4xl font-black font-mono">
             {formatCurrency(displayPrice)}
           </span>
+          {activeItem?.priceUsd > 0 && (
+            <span className="text-sm font-bold text-neutral-500 dark:text-neutral-400">
+              (${activeItem.priceUsd.toFixed(2)} USD)
+            </span>
+          )}
         </div>
+
 
         {/* ACTION BUTTONS */}
         <div className="mt-8">

@@ -8,7 +8,20 @@ export function formatCurrency(value = 0) {
   return `MMK ${formatNumber(value)}`
 }
 
-export function formatPriceRange(min, max) {
-  if (min === max) return formatCurrency(min)
-  return `MMK ${formatNumber(min)} - ${formatNumber(max)}`
+export function formatUsd(usd = 0) {
+  const num = Number(usd || 0)
+  return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+export function formatDualCurrency(usd = 0, exchangeRate = 4500) {
+  const mmk = Math.round(Number(usd || 0) * Number(exchangeRate || 4500))
+  return `${formatCurrency(mmk)} (${formatUsd(usd)})`
+}
+
+export function formatPriceRange(minUsd, maxUsd, exchangeRate = 4500) {
+  const minMmk = Math.round(Number(minUsd || 0) * Number(exchangeRate || 4500))
+  const maxMmk = Math.round(Number(maxUsd || 0) * Number(exchangeRate || 4500))
+
+  if (minUsd === maxUsd) return formatCurrency(minMmk)
+  return `MMK ${formatNumber(minMmk)} - ${formatNumber(maxMmk)}`
 }

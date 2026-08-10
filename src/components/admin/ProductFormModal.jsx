@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Sparkles, Plus, Trash2, Tag, Layers, CheckCircle, FileText } from 'lucide-react'
 import { saveProduct } from '../../services/storeService'
 import { useProducts } from '../../utils/useProducts'
+import { formatCurrency, formatUsd } from '../../utils/format'
 
 const CATEGORY_OPTIONS = ['Streaming', 'Gaming', 'Software', 'AI Tools', 'Design', 'Digital', 'Gift Cards']
 const PLATFORM_OPTIONS = ['Netflix', 'Spotify', 'YouTube', 'Steam', 'ChatGPT', 'Adobe', 'Manual', 'Direct']
@@ -19,9 +20,8 @@ const PRESET_REQUIRED_FIELDS = [
   { id: 'name_info', label: '🏷️ Name Info' },
 ]
 
-
 export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSaved }) {
-  const { categories, platforms } = useProducts()
+  const { categories, platforms, exchangeRate = 4500 } = useProducts()
 
   const [productType, setProductType] = useState('single')
   const [name, setName] = useState('')
@@ -40,8 +40,8 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
   const [customFields, setCustomFields] = useState([])
   const [newCustomField, setNewCustomField] = useState('')
 
-  // Single Item Fields
-  const [singlePrice, setSinglePrice] = useState(10000)
+  // Single Item Fields (USD)
+  const [singlePriceUsd, setSinglePriceUsd] = useState(5.0)
   const [singleStock, setSingleStock] = useState(99)
   const [singleStatus, setSingleStatus] = useState('instock')
 
@@ -88,19 +88,26 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
           initialProduct.items.map((i) => ({
             id: i.id,
             name: i.name || '',
-            priceMmk: i.priceMmk || i.price || 0,
+            priceUsd: Number(i.priceUsd !== undefined ? i.priceUsd : i.price_usd || (i.priceMmk ? i.priceMmk / exchangeRate : 5.0)),
             stock: i.stock !== undefined ? i.stock : 99,
             status: i.status || 'instock',
           })),
         )
       } else {
         const firstItem = initialProduct.items?.[0]
-        setSinglePrice(firstItem?.priceMmk || initialProduct.priceMmk || initialProduct.price || 0)
+        const usdVal = Number(
+          firstItem?.priceUsd !== undefined && firstItem?.priceUsd !== 0
+            ? firstItem.priceUsd
+            : initialProduct.priceUsd !== undefined && initialProduct?.priceUsd !== 0
+            ? initialProduct.priceUsd
+            : (firstItem?.priceMmk || initialProduct.priceMmk || initialProduct.price || 0) / exchangeRate,
+        )
+        setSinglePriceUsd(Number(usdVal.toFixed(2)))
         setSingleStock(firstItem?.stock !== undefined ? firstItem.stock : initialProduct.stock || 0)
         setSingleStatus(firstItem?.status || initialProduct.status || 'instock')
         setItems([
-          { name: '1 Month', priceMmk: 10000, stock: 99, status: 'instock' },
-          { name: '1 Year', priceMmk: 50000, stock: 99, status: 'instock' },
+          { name: '1 Month', priceUsd: 5.0, stock: 99, status: 'instock' },
+          { name: '1 Year', priceUsd: 25.0, stock: 99, status: 'instock' },
         ])
       }
     } else {
@@ -118,15 +125,15 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
       setFeatured(false)
       setRequiredTags([])
       setCustomFields([])
-      setSinglePrice(10000)
+      setSinglePriceUsd(5.0)
       setSingleStock(99)
       setSingleStatus('instock')
       setItems([
-        { name: 'Standard Pass', priceMmk: 10000, stock: 99, status: 'instock' },
-        { name: 'Premium Pass', priceMmk: 25000, stock: 99, status: 'instock' },
+        { name: 'Standard Pass', priceUsd: 5.0, stock: 99, status: 'instock' },
+        { name: 'Premium Pass', priceUsd: 12.5, stock: 99, status: 'instock' },
       ])
     }
-  }, [initialProduct, isOpen])
+  }, [initialProduct, isOpen, exchangeRate])
 
   function handleNameChange(e) {
     const newName = e.target.value
@@ -163,7 +170,7 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
   function handleAddItem() {
     setItems((prev) => [
       ...prev,
-      { name: `Option ${prev.length + 1}`, priceMmk: 10000, stock: 99, status: 'instock' },
+      { name: `Option ${prev.length + 1}`, priceUsd: 5.0, stock: 99, status: 'instock' },
     ])
   }
 
@@ -191,7 +198,7 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
           id: p.id,
           label:
             p.id === 'account_info'
-              ? 'Account Info (Username/ID)'
+              ? 'Account Info (Username/Email & Password)'
               : p.id === 'uid_info'
               ? 'Game UID / Player ID'
               : p.id === 'email_info'
@@ -219,10 +226,11 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
         featured,
         productType,
         requiredFields: finalRequiredFields,
-        priceMmk: singlePrice,
+        exchangeRate,
+        priceUsd: singlePriceUsd,
         stock: singleStock,
         status: singleStatus,
-        items: productType === 'group' ? items : [],
+        items: productType === 'group' ? items.map((i) => ({ ...i, priceUsd: Number(i.priceUsd || 0) })) : [],
       }
 
       await saveProduct(payload)
@@ -245,7 +253,7 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-[#0b7e74]" />
             <h2 className="text-xl font-black">
-              {initialProduct ? 'Edit Product & Inventory' : 'Create New Product'}
+              {initialProduct ? 'Edit Product & USD Pricing' : 'Create New Product (USD Base)'}
             </h2>
           </div>
           <button
@@ -498,26 +506,35 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
             </div>
           </div>
 
-          {/* DYNAMIC ITEM / INVENTORY SECTION */}
+          {/* DYNAMIC ITEM / INVENTORY SECTION (USD PRICING) */}
           <div className="rounded-2xl border border-black/10 bg-neutral-50 p-4 space-y-4 dark:border-white/10 dark:bg-neutral-950">
-            <h3 className="text-xs font-black uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
-              {productType === 'single' ? 'Single Item Selling Price & Stock' : 'Group Options & Inventory'}
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
+                {productType === 'single' ? 'Single Item Selling Price (USD) & Stock' : 'Group Options & USD Pricing'}
+              </h3>
+              <span className="text-[10px] font-bold text-neutral-400">
+                Rate: 1 USD = {exchangeRate.toLocaleString()} MMK
+              </span>
+            </div>
 
             {productType === 'single' ? (
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-neutral-500">
-                    Selling Price (MMK)
+                    Price in USD ($)
                   </label>
                   <input
                     type="number"
+                    step="0.01"
                     min="0"
-                    value={singlePrice}
-                    onChange={(e) => setSinglePrice(Number(e.target.value))}
+                    value={singlePriceUsd}
+                    onChange={(e) => setSinglePriceUsd(Number(e.target.value))}
                     className="mt-1.5 w-full rounded-xl border border-black/10 bg-white p-2.5 text-xs font-bold outline-none transition focus:border-[#0b7e74] dark:border-white/10 dark:bg-neutral-900"
                     required
                   />
+                  <p className="mt-1 text-[10px] font-bold text-[#0b7e74]">
+                    ≈ {formatCurrency(Math.round(singlePriceUsd * exchangeRate))}
+                  </p>
                 </div>
 
                 <div>
@@ -572,18 +589,22 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
                       />
                     </div>
 
-                    <div className="w-28">
+                    <div className="w-32">
                       <label className="block text-[10px] font-bold uppercase text-neutral-400">
-                        Price (MMK)
+                        Price (USD $)
                       </label>
                       <input
                         type="number"
+                        step="0.01"
                         min="0"
-                        value={it.priceMmk}
-                        onChange={(e) => handleItemChange(idx, 'priceMmk', Number(e.target.value))}
+                        value={it.priceUsd}
+                        onChange={(e) => handleItemChange(idx, 'priceUsd', Number(e.target.value))}
                         className="mt-1 w-full rounded-lg border border-black/10 px-2.5 py-1.5 text-xs font-bold outline-none dark:border-white/10 dark:bg-neutral-950"
                         required
                       />
+                      <p className="mt-0.5 text-[9px] font-bold text-[#0b7e74]">
+                        ≈ {formatCurrency(Math.round((it.priceUsd || 0) * exchangeRate))}
+                      </p>
                     </div>
 
                     <div className="w-20">

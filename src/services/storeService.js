@@ -378,9 +378,89 @@ export async function deliverOrder({ deliveryMessage, orderId }) {
     })
   }
 }
+export async function getExchangeRateSettings() {
+  try {
+    const { data, error } = await supabase
+      .from('store_settings')
+      .select('key, value')
+
+    if (error || !data) return { rate: 4500, lastSyncedAt: null }
+
+    const rateRow = data.find((r) => r.key === 'usd_to_mmk_rate')
+    const syncRow = data.find((r) => r.key === 'last_auto_sync_at')
+
+    return {
+      rate: rateRow && rateRow.value ? Number(rateRow.value) : 4500,
+      lastSyncedAt: syncRow ? syncRow.value : null,
+    }
+  } catch (err) {
+    console.warn('Error fetching exchange rate settings:', err)
+    return { rate: 4500, lastSyncedAt: null }
+  }
+}
+
+export async function updateExchangeRateSettings(newRate) {
+  const rateStr = String(Math.round(Number(newRate || 4500)))
+  const { error } = await supabase
+    .from('store_settings')
+    .upsert([
+      { key: 'usd_to_mmk_rate', value: rateStr, updated_at: new Date().toISOString() },
+      { key: 'last_auto_sync_at', value: new Date().toISOString(), updated_at: new Date().toISOString() },
+    ])
+
+  if (error) throw error
+  return Number(rateStr)
+}
+
+export async function fetchLiveMarketExchangeRate() {
+  try {
+    const response = await fetch('https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        asset: 'USDT',
+        fiat: 'MMK',
+        tradeType: 'BUY',
+        page: 1,
+        rows: 5,
+        payTypes: [],
+      }),
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      if (data && data.data && Array.isArray(data.data) && data.data.length > 0) {
+        const prices = data.data.map((item) => parseFloat(item.adv.price)).filter((p) => p > 3000)
+        if (prices.length > 0) {
+          const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
+          return avgPrice
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Binance P2P market rate fetch warning:', err)
+  }
+
+  return 4500
+}
+
+export async function syncAutoExchangeRate() {
+  try {
+    const marketRate = await fetchLiveMarketExchangeRate()
+    await updateExchangeRateSettings(marketRate)
+    return marketRate
+  } catch (err) {
+    console.warn('Failed to auto sync exchange rate:', err)
+    return 4500
+  }
+}
 
 export async function saveProduct(product) {
   const isGroup = product.productType === 'group' || (Array.isArray(product.items) && product.items.length > 1)
+
+  const singlePriceUsd = Number(product.priceUsd !== undefined ? product.priceUsd : product.price_usd || product.price || 0)
+  const singlePriceMmk = Math.round(singlePriceUsd * (product.exchangeRate || 4500))
+
   const productPayload = {
     badge: product.badge || null,
     category: product.category || 'Digital',
@@ -398,6 +478,7 @@ export async function saveProduct(product) {
         ? product.tags.split(',').map((tag) => tag.trim()).filter(Boolean)
         : product.tags || [],
     required_fields: product.requiredFields || [],
+    price_usd: singlePriceUsd,
   }
 
 
@@ -421,7 +502,6 @@ export async function saveProduct(product) {
 
   // Handle Items Table Upserting / Syncing
   if (!isGroup) {
-    const singlePrice = Number(product.priceMmk || product.price || 0)
     const singleStock = Number(product.stock || 0)
     const singleStatus = product.status || (singleStock > 0 ? 'instock' : 'out-of-stock')
 
@@ -436,7 +516,8 @@ export async function saveProduct(product) {
         .from('items')
         .update({
           name: '',
-          price_mmk: singlePrice,
+          price_usd: singlePriceUsd,
+          price_mmk: singlePriceMmk,
           stock: singleStock,
           status: singleStatus,
           updated_at: new Date().toISOString(),
@@ -452,7 +533,8 @@ export async function saveProduct(product) {
         {
           product_id: productId,
           name: '',
-          price_mmk: singlePrice,
+          price_usd: singlePriceUsd,
+          price_mmk: singlePriceMmk,
           stock: singleStock,
           status: singleStatus,
         },
@@ -468,30 +550,44 @@ export async function saveProduct(product) {
       .eq('product_id', productId)
 
     if (existingItems) {
-      const toDelete = existingItems.filter((ex) => !currentItemIds.includes(ex.id)).map((ex) => ex.id)
-      if (toDelete.length > 0) {
-        await supabase.from('items').delete().in('id', toDelete)
+      const idsToDelete = existingItems
+        .filter((ei) => !currentItemIds.includes(ei.id))
+        .map((ei) => ei.id)
+
+      if (idsToDelete.length > 0) {
+        await supabase.from('items').delete().in('id', idsToDelete)
       }
     }
 
     for (const it of rawItems) {
+      const itemPriceUsd = Number(it.priceUsd !== undefined ? it.priceUsd : it.price_usd || it.price || 0)
+      const itemPriceMmk = Math.round(itemPriceUsd * (product.exchangeRate || 4500))
       const itemStock = Number(it.stock || 0)
-      const itemPrice = Number(it.priceMmk || it.price || 0)
       const itemStatus = it.status || (itemStock > 0 ? 'instock' : 'out-of-stock')
 
-      const itemPayload = {
-        product_id: productId,
-        name: it.name || 'Option',
-        price_mmk: itemPrice,
-        stock: itemStock,
-        status: itemStatus,
-        updated_at: new Date().toISOString(),
-      }
-
       if (it.id && typeof it.id === 'string' && it.id.length === 36) {
-        await supabase.from('items').update(itemPayload).eq('id', it.id)
+        await supabase
+          .from('items')
+          .update({
+            name: it.name || 'Option',
+            price_usd: itemPriceUsd,
+            price_mmk: itemPriceMmk,
+            stock: itemStock,
+            status: itemStatus,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', it.id)
       } else {
-        await supabase.from('items').insert([itemPayload])
+        await supabase.from('items').insert([
+          {
+            product_id: productId,
+            name: it.name || 'Option',
+            price_usd: itemPriceUsd,
+            price_mmk: itemPriceMmk,
+            stock: itemStock,
+            status: itemStatus,
+          },
+        ])
       }
     }
   }

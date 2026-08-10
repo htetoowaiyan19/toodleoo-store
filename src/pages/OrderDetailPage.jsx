@@ -383,10 +383,18 @@ export function OrderDetailPage() {
           ))}
         </div>
 
-        <div className="flex items-center justify-between border-t border-black/10 pt-4 font-black text-base dark:border-white/10 text-[#0b7e74]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-t border-black/10 pt-4 font-black text-base dark:border-white/10 text-[#0b7e74]">
           <span>Total Order Price</span>
-          <span className="font-mono">{formatCurrency(order.totalMmk)}</span>
+          <div className="text-right">
+            <span className="font-mono">{formatCurrency(order.totalMmk)}</span>
+            {order.totalUsd > 0 && (
+              <p className="text-xs font-mono font-bold text-neutral-400">
+                (${order.totalUsd.toFixed(2)} USD @ {order.exchangeRateUsed || 4500} MMK/USD)
+              </p>
+            )}
+          </div>
         </div>
+
       </div>
     </section>
   )
