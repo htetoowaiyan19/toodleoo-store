@@ -252,14 +252,67 @@ export function CheckoutPage() {
           </div>
         )}
 
-        {/* CONTACT METHOD PRIORITIES */}
-        <div className="mt-8 rounded-2xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-          <ContactMethodsEditor
-            initialMethods={contactMethods}
-            onSave={handleSaveContacts}
-            title="Order Contact Method Priorities (For 2FA & Order Updates)"
-          />
+        {/* CONTACT METHOD PRIORITIES SUMMARY */}
+        <div className="mt-8 rounded-2xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-black/5 pb-3 dark:border-white/5">
+            <div>
+              <h3 className="text-sm font-black flex items-center gap-1.5">
+                <Tag className="h-4 w-4 text-[#0b7e74]" /> Contact Priorities (For 2FA & Support)
+              </h3>
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                Admins will reach out using these 3 priorities if 2FA code or verification is needed.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              {contactFeePercent > 0 ? (
+                <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold text-amber-600 border border-amber-500/20 dark:text-amber-400">
+                  +{contactFeePercent}% Contact Surcharge
+                </span>
+              ) : (
+                <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-500/20 dark:text-emerald-400">
+                  0% Surcharge
+                </span>
+              )}
+
+              <Link
+                to="/account"
+                className="text-[11px] font-bold text-[#0b7e74] hover:underline shrink-0"
+              >
+                Edit in Settings →
+              </Link>
+            </div>
+          </div>
+
+          {contactMethods && contactMethods.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-3 font-mono">
+              {contactMethods.map((cm, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-xl border border-black/5 bg-neutral-50 p-3 dark:border-white/5 dark:bg-neutral-950/60"
+                >
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+                    {idx === 0 ? '🥇 1st Priority' : idx === 1 ? '🥈 2nd Priority' : '🥉 3rd Priority'}
+                  </span>
+                  <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200 block mt-0.5">
+                    {cm.type}
+                  </span>
+                  <span className="text-xs font-black text-[#0b7e74] truncate block mt-0.5 select-all">
+                    {cm.value || 'Not set'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-neutral-500 font-medium">
+              No contact priorities configured. Defaulting to account email ({profile?.email || 'N/A'}).{' '}
+              <Link to="/account" className="text-[#0b7e74] font-bold hover:underline">
+                Set contact priorities in Settings →
+              </Link>
+            </div>
+          )}
         </div>
+
 
         {error && (
           <div className="mt-5 rounded-2xl bg-red-500/10 p-4 text-xs font-bold text-red-500">
