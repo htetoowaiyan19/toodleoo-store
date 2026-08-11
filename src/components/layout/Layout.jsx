@@ -4,6 +4,7 @@ import { useCart } from '../../utils/useCart'
 import { useAuth } from '../../utils/useAuth'
 import { GlobalSearch } from '../product/GlobalSearch'
 import { formatCurrency } from '../../utils/format'
+import logoImage from '../../assets/logo/logo_toodleoo-nobg.png'
 import {
   Wallet,
   RotateCw,
@@ -39,10 +40,10 @@ export function Layout({ children, onCartOpen }) {
     ...navItems,
     ...(user
       ? [
-          { to: '/wallet', label: 'Wallet' },
-          { to: '/orders', label: 'Orders' },
-          { to: '/account', label: 'Account' },
-        ]
+        { to: '/wallet', label: 'Wallet' },
+        { to: '/orders', label: 'Orders' },
+        { to: '/account', label: 'Account' },
+      ]
       : []),
     ...(isAdmin ? [{ to: '/admin', label: 'Admin' }] : []),
   ]
@@ -71,16 +72,15 @@ export function Layout({ children, onCartOpen }) {
   return (
     <div className="min-h-screen bg-[#f7fbfa] text-neutral-950 transition-colors dark:bg-neutral-950 dark:text-white pb-20 md:pb-0">
       {/* STICKY DESKTOP & MOBILE HEADER */}
-      <header className="sticky top-0 z-30 px-3 py-3 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2.5 rounded-full border border-black/10 bg-white/85 px-3 py-2 shadow-xl shadow-black/5 backdrop-blur-xl transition-colors dark:border-white/10 dark:bg-neutral-900/85 dark:shadow-black/30">
+      <header className="sticky top-0 z-30 px-2 py-2 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-1.5 sm:gap-2.5 rounded-full border border-black/10 bg-white/85 px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-xl shadow-black/5 backdrop-blur-xl transition-colors dark:border-white/10 dark:bg-neutral-900/85 dark:shadow-black/30">
           {/* BRAND LOGO */}
-          <Link to="/" className="flex items-center gap-2 pl-1">
-            <span className="grid size-9 sm:size-10 place-items-center rounded-xl bg-gradient-to-br from-[#0fa697] to-[#ff655b] font-black text-white shadow-sm text-sm sm:text-base">
-              T
-            </span>
-            <span className="text-base sm:text-lg font-black tracking-tight">
-              Toodleoo
-            </span>
+          <Link to="/" className="flex items-center pl-0.5 shrink-0">
+            <img
+              src={logoImage}
+              alt="Toodleoo Store"
+              className="h-7 sm:h-9 w-auto object-contain transition hover:opacity-90"
+            />
           </Link>
 
           {/* MAIN PILL NAVIGATION BAR (DESKTOP ONLY) */}
@@ -103,10 +103,9 @@ export function Layout({ children, onCartOpen }) {
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
-                  `relative z-10 rounded-full px-4 py-2 text-center transition-colors duration-300 ${
-                    isActive
-                      ? 'text-white dark:text-neutral-950'
-                      : 'text-neutral-600 hover:text-neutral-950 dark:text-white/60 dark:hover:text-white'
+                  `relative z-10 rounded-full px-4 py-2 text-center transition-colors duration-300 ${isActive
+                    ? 'text-white dark:text-neutral-950'
+                    : 'text-neutral-600 hover:text-neutral-950 dark:text-white/60 dark:hover:text-white'
                   }`
                 }
               >
@@ -116,28 +115,28 @@ export function Layout({ children, onCartOpen }) {
           </nav>
 
           {/* HEADER ACTION BUTTONS */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* SEARCH ICON BUTTON */}
             <button
               type="button"
               onClick={() => setIsSearchOpen(true)}
               aria-label="Search Store"
               title="Search store (Ctrl+K)"
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition hover:bg-neutral-100 active:scale-[0.98] dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/20"
+              className="flex h-8 w-8 sm:h-9 sm:w-9 cursor-pointer items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition hover:bg-neutral-100 active:scale-[0.98] dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/20 shrink-0"
             >
-              <Search className="h-4 w-4 text-neutral-600 dark:text-neutral-300" />
+              <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-neutral-600 dark:text-neutral-300" />
             </button>
 
             {/* WALLET BALANCE & REFRESH ICON */}
             {user && (
-              <div className="flex h-9 items-center gap-1.5 rounded-full border border-black/10 bg-white px-3 text-xs font-bold shadow-sm dark:border-white/10 dark:bg-white/10">
+              <div className="flex h-8 sm:h-9 items-center gap-1 sm:gap-1.5 rounded-full border border-black/10 bg-white px-2 sm:px-3 text-[11px] sm:text-xs font-bold shadow-sm dark:border-white/10 dark:bg-white/10 shrink-0">
                 <Link
                   to="/wallet"
                   className="flex items-center gap-1 text-neutral-900 dark:text-white hover:text-[#0b7e74] transition"
                   title="View Personal Wallet"
                 >
-                  <Wallet className="h-4 w-4 text-[#0b7e74]" />
-                  <span className="font-mono text-xs font-black">
+                  <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#0b7e74]" />
+                  <span className="font-mono font-black">
                     {Number(profile?.walletBalance || 0).toLocaleString()}
                   </span>
                 </Link>
@@ -146,7 +145,7 @@ export function Layout({ children, onCartOpen }) {
                   onClick={handleRefreshWallet}
                   disabled={isRefreshingWallet}
                   title="Refresh Wallet Balance"
-                  className="p-0.5 text-neutral-400 hover:text-[#0b7e74] transition cursor-pointer rounded-full"
+                  className="hidden sm:inline-block p-0.5 text-neutral-400 hover:text-[#0b7e74] transition cursor-pointer rounded-full"
                 >
                   <RotateCw className={`h-3 w-3 ${isRefreshingWallet ? 'animate-spin text-[#0b7e74]' : ''}`} />
                 </button>
@@ -159,10 +158,10 @@ export function Layout({ children, onCartOpen }) {
               onClick={onCartOpen}
               aria-label="Shopping Cart"
               title="View Shopping Cart"
-              className="relative flex h-9 items-center gap-1.5 cursor-pointer rounded-full border border-black/10 bg-white px-3 text-xs font-semibold shadow-sm transition hover:bg-neutral-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/10"
+              className="relative flex h-8 sm:h-9 items-center gap-1 sm:gap-1.5 cursor-pointer rounded-full border border-black/10 bg-white px-2 sm:px-3 text-[11px] sm:text-xs font-semibold shadow-sm transition hover:bg-neutral-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/10 shrink-0"
             >
-              <ShoppingCart className="h-4 w-4 text-[#0b7e74]" />
-              <span className="rounded-full bg-[#0b7e74] px-1.5 py-0.5 text-[10px] font-black text-white">
+              <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#0b7e74]" />
+              <span className="rounded-full bg-[#0b7e74] px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black text-white">
                 {count}
               </span>
             </button>
@@ -172,15 +171,14 @@ export function Layout({ children, onCartOpen }) {
               to={user ? '/account' : '/login'}
               title={user ? profile?.displayName || 'Account' : 'Login'}
               aria-label={user ? 'Account' : 'Login'}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition hover:bg-neutral-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/10"
+              className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition hover:bg-neutral-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/10 shrink-0"
             >
-              <User className="h-4 w-4 text-[#0b7e74]" />
+              <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#0b7e74]" />
             </Link>
-
-
           </div>
         </div>
       </header>
+
 
       {/* PAGE CONTENT CONTAINER */}
       <main>{children}</main>
@@ -190,10 +188,9 @@ export function Layout({ children, onCartOpen }) {
         <NavLink
           to="/"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${
-              isActive
-                ? 'text-[#0b7e74] dark:text-[#67dccf]'
-                : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
+            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
+              ? 'text-[#0b7e74] dark:text-[#67dccf]'
+              : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
             }`
           }
         >
@@ -204,10 +201,9 @@ export function Layout({ children, onCartOpen }) {
         <NavLink
           to="/store"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${
-              isActive
-                ? 'text-[#0b7e74] dark:text-[#67dccf]'
-                : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
+            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
+              ? 'text-[#0b7e74] dark:text-[#67dccf]'
+              : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
             }`
           }
         >
@@ -218,10 +214,9 @@ export function Layout({ children, onCartOpen }) {
         <NavLink
           to="/wallet"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${
-              isActive
-                ? 'text-[#0b7e74] dark:text-[#67dccf]'
-                : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
+            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
+              ? 'text-[#0b7e74] dark:text-[#67dccf]'
+              : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
             }`
           }
         >
@@ -232,10 +227,9 @@ export function Layout({ children, onCartOpen }) {
         <NavLink
           to="/orders"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${
-              isActive
-                ? 'text-[#0b7e74] dark:text-[#67dccf]'
-                : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
+            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
+              ? 'text-[#0b7e74] dark:text-[#67dccf]'
+              : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
             }`
           }
         >
@@ -246,10 +240,9 @@ export function Layout({ children, onCartOpen }) {
         <NavLink
           to={user ? '/account' : '/login'}
           className={({ isActive }) =>
-            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${
-              isActive
-                ? 'text-[#0b7e74] dark:text-[#67dccf]'
-                : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
+            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
+              ? 'text-[#0b7e74] dark:text-[#67dccf]'
+              : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
             }`
           }
         >
@@ -261,10 +254,9 @@ export function Layout({ children, onCartOpen }) {
           <NavLink
             to="/admin"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${
-                isActive
-                  ? 'text-[#0b7e74] dark:text-[#67dccf]'
-                  : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
+              `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
+                ? 'text-[#0b7e74] dark:text-[#67dccf]'
+                : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
               }`
             }
           >

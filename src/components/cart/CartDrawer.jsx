@@ -31,22 +31,19 @@ export function CartDrawer({ isOpen, onClose }) {
 
   return (
     <div
-      className={`fixed inset-0 z-50 transition ${
-        isOpen ? 'pointer-events-auto' : 'pointer-events-none'
-      }`}
+      className={`fixed inset-0 z-50 transition ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'
+        }`}
     >
       <button
         type="button"
         aria-label="Close cart overlay"
         onClick={onClose}
-        className={`absolute inset-0 bg-black/35 transition-opacity ${
-          isOpen ? 'opacity-100' : 'opacity-0'
-        }`}
+        className={`absolute inset-0 bg-black/35 transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0'
+          }`}
       />
       <aside
-        className={`absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl transition-transform duration-300 dark:bg-neutral-950 dark:text-white ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl transition-transform duration-300 dark:bg-neutral-950 dark:text-white ${isOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
       >
         <div className="flex items-center justify-between border-b border-black/10 p-5 dark:border-white/10">
           <p className="text-lg font-black">Your Cart ({items.length})</p>

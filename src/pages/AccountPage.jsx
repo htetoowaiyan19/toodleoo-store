@@ -183,22 +183,20 @@ export function AccountPage() {
                 <button
                   type="button"
                   onClick={() => isDarkMode && toggleDarkMode()}
-                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
-                    !isDarkMode
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${!isDarkMode
                       ? 'bg-neutral-950 text-white shadow-sm'
                       : 'text-neutral-500 hover:text-white'
-                  }`}
+                    }`}
                 >
                   ☀️ Light
                 </button>
                 <button
                   type="button"
                   onClick={() => !isDarkMode && toggleDarkMode()}
-                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
-                    isDarkMode
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${isDarkMode
                       ? 'bg-white text-neutral-950 shadow-sm'
                       : 'text-neutral-500 hover:text-black'
-                  }`}
+                    }`}
                 >
                   🌙 Dark
                 </button>
