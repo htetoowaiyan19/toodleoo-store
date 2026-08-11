@@ -6,13 +6,23 @@ export function DeleteConfirmModal({
   onConfirm,
   title = 'Delete Permanently?',
   message = 'Warning: This action cannot be undone. You cannot recover this data once deleted.',
+  confirmText = 'Yes, Delete Order',
   isDeleting = false,
+  requireCooldown = false,
+  cooldownSeconds = 5,
 }) {
-  const [cooldown, setCooldown] = useState(5)
+  const initialCooldown = requireCooldown ? cooldownSeconds : 0
+  const [cooldown, setCooldown] = useState(initialCooldown)
 
   useEffect(() => {
     if (!isOpen) return
 
+    if (!requireCooldown) {
+      setCooldown(0)
+      return
+    }
+
+    setCooldown(cooldownSeconds)
     const timer = setInterval(() => {
       setCooldown((prev) => {
         if (prev <= 1) {
@@ -25,9 +35,10 @@ export function DeleteConfirmModal({
 
     return () => {
       clearInterval(timer)
-      setCooldown(5)
+      setCooldown(initialCooldown)
     }
-  }, [isOpen])
+  }, [isOpen, requireCooldown, cooldownSeconds, initialCooldown])
+
 
   if (!isOpen) return null
 
@@ -73,8 +84,9 @@ export function DeleteConfirmModal({
             ) : cooldown > 0 ? (
               <span>Confirm Delete ({cooldown}s)</span>
             ) : (
-              'Yes, Delete Permanently'
+              confirmText
             )}
+
           </button>
         </div>
       </div>
