@@ -1,13 +1,8 @@
 import { useProducts } from '../../utils/useProducts'
 
 export function ProductFilters({ filters, onChange, activeCount = 0 }) {
-  const { categories = [], platforms = [], products = [] } = useProducts()
+  const { categories = [], platforms = [], maxProductPrice = 50000 } = useProducts()
 
-  // Calculate price boundaries dynamically
-  const maxProductPrice = Math.max(
-    ...products.map((p) => Number(p.priceMmk || p.price || 0)),
-    50000
-  )
 
   function handleReset() {
     onChange({

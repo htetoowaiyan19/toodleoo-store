@@ -2,29 +2,47 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { supabase } from '../../supabase'
 import { products as fallbackProducts } from '../../data/products'
 import { ProductContext } from '../../utils/productContext'
-import { getExchangeRateSettings, syncAutoExchangeRate } from '../../services/storeService'
+import { getExchangeRateSettings, syncAutoExchangeRate, updateFeeSettings } from '../../services/storeService'
+import {
+  formatCurrency as globalFormatCurrency,
+  formatUsdToMmk as globalFormatUsdToMmk,
+  formatPriceRange as globalFormatPriceRange,
+} from '../../utils/format'
 
-function normalizeProduct(data, exchangeRate = 4500) {
+function parsePriceUsd(usdVal, exchangeRate = 4500) {
+  let usd = Number(usdVal || 0)
+
+  // Repeatedly scale down if usd > 1000 to fix compounded pricing artifacts
+  if (usd > 1000) {
+    while (usd > 1000) {
+      usd = usd / exchangeRate
+    }
+    return Math.max(0, Number(usd.toFixed(2)))
+  }
+
+  return Math.max(0, Number(usd.toFixed(2)))
+}
+
+function normalizeProduct(data, exchangeRate = 4500, taxPercent = 0, serviceFeePercent = 0) {
   const childItems = Array.isArray(data.items) ? data.items : []
   const isGroup = data.product_type === 'group' || childItems.length > 1
   const firstItem = childItems[0]
 
-  const firstUsd = Number(firstItem?.price_usd !== undefined && firstItem?.price_usd !== 0
-    ? firstItem.price_usd
-    : data.price_usd !== undefined && data.price_usd !== 0
-    ? data.price_usd
-    : (firstItem?.price_mmk || data.price_mmk || 0) / exchangeRate)
+  const firstUsd = parsePriceUsd(
+    firstItem?.price_usd !== undefined ? firstItem.price_usd : data.price_usd,
+    exchangeRate,
+  )
 
-  const basePriceUsd = Math.max(0, Number(firstUsd.toFixed(2)))
-  const basePriceMmk = Math.round(basePriceUsd * exchangeRate)
+  const feeMultiplier = 1 + (Number(taxPercent || 0) + Number(serviceFeePercent || 0)) / 100
+  const basePriceUsd = firstUsd
+  const basePriceMmk = Math.round(basePriceUsd * exchangeRate * feeMultiplier)
   const baseStock = Number(firstItem?.stock !== undefined ? firstItem.stock : data.stock || 0)
   const baseStatus = firstItem?.status || data.status || (baseStock > 0 ? 'instock' : 'out-of-stock')
 
   const items = isGroup
     ? childItems.map((i, idx) => {
-        const itemUsdRaw = Number(i.price_usd !== undefined && i.price_usd !== 0 ? i.price_usd : (i.price_mmk || 0) / exchangeRate)
-        const itemUsd = Math.max(0, Number(itemUsdRaw.toFixed(2)))
-        const itemMmk = Math.round(itemUsd * exchangeRate)
+        const itemUsd = parsePriceUsd(i.price_usd, exchangeRate)
+        const itemMmk = Math.round(itemUsd * exchangeRate * feeMultiplier)
         return {
           id: i.id || `item-${idx}`,
           name: i.name || `Option ${idx + 1}`,
@@ -73,9 +91,10 @@ function normalizeProduct(data, exchangeRate = 4500) {
   }
 }
 
-function normalizeFallback(product, exchangeRate = 4500) {
+function normalizeFallback(product, exchangeRate = 4500, taxPercent = 0, serviceFeePercent = 0) {
+  const feeMultiplier = 1 + (Number(taxPercent || 0) + Number(serviceFeePercent || 0)) / 100
   const basePriceUsd = product.price || 5.0
-  const basePriceMmk = Math.round(basePriceUsd * exchangeRate)
+  const basePriceMmk = Math.round(basePriceUsd * exchangeRate * feeMultiplier)
 
   return {
     ...product,
@@ -103,43 +122,51 @@ function normalizeFallback(product, exchangeRate = 4500) {
 
 export function ProductProvider({ children }) {
   const [exchangeRate, setExchangeRate] = useState(4500)
+  const [taxPercent, setTaxPercent] = useState(0)
+  const [serviceFeePercent, setServiceFeePercent] = useState(0)
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
   const [products, setProducts] = useState(() =>
-    fallbackProducts.map((p) => normalizeFallback(p, 4500)),
+    fallbackProducts.map((p) => normalizeFallback(p, 4500, 0, 0)),
   )
   const [loading, setLoading] = useState(true)
 
   const loadExchangeRate = useCallback(async () => {
     const settings = await getExchangeRateSettings()
     if (settings.rate) setExchangeRate(settings.rate)
+    if (settings.taxPercent !== undefined) setTaxPercent(settings.taxPercent)
+    if (settings.serviceFeePercent !== undefined) setServiceFeePercent(settings.serviceFeePercent)
     if (settings.lastSyncedAt) setLastSyncedAt(settings.lastSyncedAt)
-    return settings.rate || 4500
+    return {
+      rate: settings.rate || 4500,
+      taxPercent: settings.taxPercent || 0,
+      serviceFeePercent: settings.serviceFeePercent || 0,
+    }
   }, [])
 
-  const loadProducts = useCallback(async (activeRate = exchangeRate) => {
+  const loadProducts = useCallback(async (activeRate = exchangeRate, activeTax = taxPercent, activeFee = serviceFeePercent) => {
     const { data, error } = await supabase
       .from('products')
       .select('*, items(*)')
       .order('updated_at', { ascending: false })
 
     if (!error && Array.isArray(data)) {
-      setProducts(data.map((p) => normalizeProduct(p, activeRate)))
+      setProducts(data.map((p) => normalizeProduct(p, activeRate, activeTax, activeFee)))
     }
     setLoading(false)
-  }, [exchangeRate])
+  }, [exchangeRate, taxPercent, serviceFeePercent])
 
   useEffect(() => {
     let active = true
 
     async function init() {
-      const rate = await loadExchangeRate()
+      const settings = await loadExchangeRate()
       if (active) {
-        await loadProducts(rate)
+        await loadProducts(settings.rate, settings.taxPercent, settings.serviceFeePercent)
         // Background Market Rate Auto-Sync
         syncAutoExchangeRate().then((newRate) => {
-          if (active && newRate && newRate !== rate) {
+          if (active && newRate && newRate !== settings.rate) {
             setExchangeRate(newRate)
-            loadProducts(newRate)
+            loadProducts(newRate, settings.taxPercent, settings.serviceFeePercent)
           }
         })
       }
@@ -149,11 +176,11 @@ export function ProductProvider({ children }) {
 
     const channelProd = supabase
       .channel('products-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => loadProducts(exchangeRate))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => loadProducts(exchangeRate))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => loadProducts(exchangeRate, taxPercent, serviceFeePercent))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => loadProducts(exchangeRate, taxPercent, serviceFeePercent))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'store_settings' }, async () => {
-        const freshRate = await loadExchangeRate()
-        loadProducts(freshRate)
+        const freshSettings = await loadExchangeRate()
+        loadProducts(freshSettings.rate, freshSettings.taxPercent, freshSettings.serviceFeePercent)
       })
       .subscribe()
 
@@ -161,19 +188,52 @@ export function ProductProvider({ children }) {
       active = false
       supabase.removeChannel(channelProd)
     }
-  }, [exchangeRate, loadExchangeRate, loadProducts])
+  }, [exchangeRate, taxPercent, serviceFeePercent, loadExchangeRate, loadProducts])
 
   const convertUsdToMmk = useCallback((usd) => {
-    return Math.round(Number(usd || 0) * exchangeRate)
-  }, [exchangeRate])
+    const feeMultiplier = 1 + (Number(taxPercent || 0) + Number(serviceFeePercent || 0)) / 100
+    return Math.round(Number(usd || 0) * exchangeRate * feeMultiplier)
+  }, [exchangeRate, taxPercent, serviceFeePercent])
+
+  const formatCurrency = useCallback((mmkValue) => {
+    return globalFormatCurrency(mmkValue)
+  }, [])
+
+  const formatUsdToMmk = useCallback((usdValue) => {
+    return globalFormatUsdToMmk(usdValue, exchangeRate, taxPercent, serviceFeePercent)
+  }, [exchangeRate, taxPercent, serviceFeePercent])
+
+  const formatPriceRange = useCallback((minMmk, maxMmk) => {
+    return globalFormatPriceRange(minMmk, maxMmk)
+  }, [])
+
+  const maxProductPrice = useMemo(() => {
+    if (!products || products.length === 0) return 50000
+    const allPrices = products.flatMap((p) => {
+      const itemsList = Array.isArray(p.items) ? p.items : []
+      if (itemsList.length > 0) {
+        return itemsList.map((i) => Number(i.priceMmk || i.price || 0))
+      }
+      return [Number(p.priceMmk || p.price || 0)]
+    })
+    return Math.max(...allPrices, 50000)
+  }, [products])
+
+  const updateFees = useCallback(async ({ taxPercent: newTax, serviceFeePercent: newFee }) => {
+    const updated = await updateFeeSettings({ taxPercent: newTax, serviceFeePercent: newFee })
+    setTaxPercent(updated.taxPercent)
+    setServiceFeePercent(updated.serviceFeePercent)
+    await loadProducts(exchangeRate, updated.taxPercent, updated.serviceFeePercent)
+    return updated
+  }, [exchangeRate, loadProducts])
 
   const value = useMemo(() => {
     const categories = ['All', ...new Set(products.map((item) => item.category))]
     const platforms = ['All', ...new Set(products.map((item) => item.platform))]
 
     const refreshProducts = async () => {
-      const rate = await loadExchangeRate()
-      await loadProducts(rate)
+      const settings = await loadExchangeRate()
+      await loadProducts(settings.rate, settings.taxPercent, settings.serviceFeePercent)
     }
 
     const triggerMarketRateSync = async () => {
@@ -181,7 +241,7 @@ export function ProductProvider({ children }) {
       if (freshRate) {
         setExchangeRate(freshRate)
         setLastSyncedAt(new Date().toISOString())
-        await loadProducts(freshRate)
+        await loadProducts(freshRate, taxPercent, serviceFeePercent)
       }
       return freshRate
     }
@@ -191,13 +251,20 @@ export function ProductProvider({ children }) {
       loading,
       platforms,
       products,
+      maxProductPrice,
       exchangeRate,
+      taxPercent,
+      serviceFeePercent,
       lastSyncedAt,
       convertUsdToMmk,
+      formatCurrency,
+      formatUsdToMmk,
+      formatPriceRange,
       refreshProducts,
       triggerMarketRateSync,
+      updateFees,
     }
-  }, [loading, products, exchangeRate, lastSyncedAt, convertUsdToMmk, loadExchangeRate, loadProducts])
+  }, [loading, products, maxProductPrice, exchangeRate, taxPercent, serviceFeePercent, lastSyncedAt, convertUsdToMmk, formatCurrency, formatUsdToMmk, formatPriceRange, loadExchangeRate, loadProducts, updateFees])
 
   return <ProductContext.Provider value={value}>{children}</ProductContext.Provider>
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { X, Sparkles, Plus, Trash2, Tag, Layers, CheckCircle, FileText } from 'lucide-react'
+import { X, Sparkles, Plus, Trash2, Tag, Layers, CheckCircle, FileText, GripVertical } from 'lucide-react'
 import { saveProduct } from '../../services/storeService'
+
 import { useProducts } from '../../utils/useProducts'
 import { formatCurrency, formatUsd } from '../../utils/format'
 
@@ -21,7 +22,9 @@ const PRESET_REQUIRED_FIELDS = [
 ]
 
 export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSaved }) {
-  const { categories, platforms, exchangeRate = 4500 } = useProducts()
+  const { categories, platforms, exchangeRate = 4500, formatUsdToMmk } = useProducts()
+
+
 
   const [productType, setProductType] = useState('single')
   const [name, setName] = useState('')
@@ -184,7 +187,58 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
     )
   }
 
+  // Drag and Drop Variant Reordering
+  const [draggedIndex, setDraggedIndex] = useState(null)
+  const [dragOverIndex, setDragOverIndex] = useState(null)
+
+  function handleDragStart(e, index) {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    try {
+      e.dataTransfer.setData('text/plain', index.toString())
+    } catch {}
+  }
+
+  function handleDragOver(e, index) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index)
+    }
+  }
+
+  function handleDragLeave(e, index) {
+    if (dragOverIndex === index) {
+      setDragOverIndex(null)
+    }
+  }
+
+  function handleDrop(e, dropIndex) {
+    e.preventDefault()
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null)
+      setDragOverIndex(null)
+      return
+    }
+
+    setItems((prevItems) => {
+      const updated = [...prevItems]
+      const [movedItem] = updated.splice(draggedIndex, 1)
+      updated.splice(dropIndex, 0, movedItem)
+      return updated
+    })
+
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  function handleDragEnd() {
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
   async function handleSubmit(e) {
+
     e.preventDefault()
     if (!name.trim() || !slug.trim()) {
       alert('Product name and SLUG are required.')
@@ -533,8 +587,10 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
                     required
                   />
                   <p className="mt-1 text-[10px] font-bold text-[#0b7e74]">
-                    ≈ {formatCurrency(Math.round(singlePriceUsd * exchangeRate))}
+                    ≈ {formatUsdToMmk(singlePriceUsd)}
                   </p>
+
+
                 </div>
 
                 <div>
@@ -570,11 +626,35 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
               </div>
             ) : (
               <div className="space-y-3">
-                {items.map((it, idx) => (
-                  <div
-                    key={it.id || idx}
-                    className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-neutral-900 sm:flex-row sm:items-center"
-                  >
+                {items.map((it, idx) => {
+                  const isDragging = draggedIndex === idx
+                  const isOver = dragOverIndex === idx
+
+                  return (
+                    <div
+                      key={it.id || idx}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, idx)}
+                      onDragOver={(e) => handleDragOver(e, idx)}
+                      onDragLeave={(e) => handleDragLeave(e, idx)}
+                      onDrop={(e) => handleDrop(e, idx)}
+                      onDragEnd={handleDragEnd}
+                      className={`flex flex-col gap-3 rounded-xl border bg-white p-3 shadow-sm transition-all duration-200 dark:bg-neutral-900 sm:flex-row sm:items-center ${
+                        isDragging
+                          ? 'opacity-40 border-dashed border-[#0b7e74]'
+                          : isOver
+                          ? 'border-[#0b7e74] ring-2 ring-[#0b7e74]/30 scale-[1.01]'
+                          : 'border-black/10 dark:border-white/10'
+                      }`}
+                    >
+                      {/* DRAG HANDLE */}
+                      <div
+                        className="flex h-8 w-6 cursor-grab active:cursor-grabbing items-center justify-center text-neutral-400 hover:text-[#0b7e74] transition shrink-0"
+                        title="Click and drag to reorder option"
+                      >
+                        <GripVertical className="h-4 w-4" />
+                      </div>
+
                     <div className="flex-1">
                       <label className="block text-[10px] font-bold uppercase text-neutral-400">
                         Option Title / Duration
@@ -603,8 +683,10 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
                         required
                       />
                       <p className="mt-0.5 text-[9px] font-bold text-[#0b7e74]">
-                        ≈ {formatCurrency(Math.round((it.priceUsd || 0) * exchangeRate))}
+                        ≈ {formatUsdToMmk(it.priceUsd)}
                       </p>
+
+
                     </div>
 
                     <div className="w-20">
@@ -649,7 +731,10 @@ export function ProductFormModal({ isOpen, onClose, initialProduct = null, onSav
                       </button>
                     )}
                   </div>
-                ))}
+                )
+              })}
+
+
 
                 <button
                   type="button"

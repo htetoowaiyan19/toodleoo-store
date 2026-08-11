@@ -6,34 +6,31 @@ import { useProducts } from '../utils/useProducts'
 
 export function StorePage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { loading, products } = useProducts()
+  const { loading, products, maxProductPrice = 50000 } = useProducts()
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
 
   const initialSearch = searchParams.get('search') || ''
 
-  const maxProductPrice = useMemo(() => {
-    return Math.max(
-      ...products.map((p) => Number(p.priceMmk || p.price || 0)),
-      50000
-    )
-  }, [products])
 
   const [filters, setFilters] = useState({
     category: 'All',
     platform: 'All',
     availability: 'All',
     minPrice: 0,
-    maxPrice: maxProductPrice,
+    maxPrice: null,
     search: initialSearch,
     sort: 'featured',
   })
 
+  const activeMaxPrice = filters.maxPrice ?? maxProductPrice
+
   const effectiveFilters = useMemo(() => {
     return {
       ...filters,
+      maxPrice: activeMaxPrice,
       search: initialSearch || filters.search,
     }
-  }, [filters, initialSearch])
+  }, [filters, activeMaxPrice, initialSearch])
 
   // Count active filters (excluding defaults)
   const activeFilterCount = useMemo(() => {
@@ -49,7 +46,14 @@ export function StorePage() {
   const filteredProducts = useMemo(() => {
     return products
       .filter((product) => {
-        const itemPrice = Number(product.priceMmk || product.price || 0)
+        const itemsList = Array.isArray(product.items) ? product.items : []
+        let minItemPrice = Number(product.priceMmk || product.price || 0)
+
+        if (itemsList.length > 0) {
+          const prices = itemsList.map((i) => Number(i.priceMmk || i.price || 0))
+          minItemPrice = Math.min(...prices)
+        }
+
         const matchesCategory =
           effectiveFilters.category === 'All' ||
           product.category.toLowerCase() === effectiveFilters.category.toLowerCase()
@@ -58,7 +62,7 @@ export function StorePage() {
           effectiveFilters.platform === 'All' ||
           product.platform.toLowerCase() === effectiveFilters.platform.toLowerCase()
 
-        const matchesPrice = itemPrice <= (effectiveFilters.maxPrice || maxProductPrice)
+        const matchesPrice = minItemPrice <= effectiveFilters.maxPrice
 
         let matchesAvailability = true
         if (effectiveFilters.availability === 'instock') {
@@ -66,7 +70,6 @@ export function StorePage() {
         } else if (effectiveFilters.availability === 'pre-order') {
           matchesAvailability = product.status === 'pre-order'
         }
-
 
         const q = effectiveFilters.search.trim().toLowerCase()
         const matchesSearch =
@@ -86,17 +89,36 @@ export function StorePage() {
         )
       })
       .sort((a, b) => {
+        const getRank = (prod) => {
+          const isInstock = prod.status === 'instock' && Number(prod.stock || 0) > 0
+          if (isInstock) return 1
+          const isPreorder = prod.status === 'pre-order' || prod.status === 'preorder'
+          if (isPreorder) return 2
+          return 3
+        }
+
+        const rankA = getRank(a)
+        const rankB = getRank(b)
+
+        if (rankA !== rankB) {
+          return rankA - rankB
+        }
+
         const priceA = Number(a.priceMmk || a.price || 0)
         const priceB = Number(b.priceMmk || b.price || 0)
 
         if (effectiveFilters.sort === 'price-low') return priceA - priceB
         if (effectiveFilters.sort === 'price-high') return priceB - priceA
         if (effectiveFilters.sort === 'rating') return (b.rating || 0) - (a.rating || 0)
-        if (effectiveFilters.sort === 'name-asc') return a.name.localeCompare(b.name)
         if (effectiveFilters.sort === 'newest') return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)
-        return Number(b.featured) - Number(a.featured)
+        if (effectiveFilters.sort === 'featured' && Number(b.featured) !== Number(a.featured)) {
+          return Number(b.featured) - Number(a.featured)
+        }
+
+        return a.name.localeCompare(b.name)
       })
-  }, [effectiveFilters, products, maxProductPrice])
+  }, [effectiveFilters, products])
+
 
   function resetFilters() {
     setFilters({
@@ -104,12 +126,13 @@ export function StorePage() {
       platform: 'All',
       availability: 'All',
       minPrice: 0,
-      maxPrice: maxProductPrice,
+      maxPrice: null,
       search: '',
       sort: 'featured',
     })
     setSearchParams({})
   }
+
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-4 sm:py-10 sm:px-6 lg:px-8">

@@ -41,21 +41,22 @@ begin
 end $$;
 
 insert into public.store_settings (key, value)
-values ('usd_to_mmk_rate', '4500'), ('last_auto_sync_at', now()::text)
+values ('usd_to_mmk_rate', '4500'), ('last_auto_sync_at', now()::text), ('tax_percent', '0'), ('service_fee_percent', '0')
 on conflict (key) do nothing;
 
--- 2. CREATE ITEMS TABLE
+
+-- 2. CREATE ITEMS TABLE IF NOT EXISTS
 create table if not exists public.items (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products(id) on delete cascade,
   name text not null default '',
-  price_mmk integer not null check (price_mmk >= 0),
   price_usd numeric(10,2) not null default 0.00 check (price_usd >= 0),
   stock integer not null check (stock >= 0) default 0,
   status text not null check (status in ('instock', 'pre-order', 'out-of-stock')) default 'instock',
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
 
 do $$
 begin
@@ -109,23 +110,24 @@ begin
 
         for v in select * from jsonb_array_elements(p.variants) loop
           v_name := coalesce(v->>'name', 'Option');
-          v_price := coalesce((v->>'price_mmk')::integer, (v->>'priceMmk')::integer, p.price_mmk, 0);
+          v_price := coalesce((v->>'price_usd')::numeric, (v->>'priceUsd')::numeric, p.price_usd, 0.00);
           v_stock := coalesce((v->>'stock')::integer, p.stock, 99);
           v_status := case when v_stock > 0 then 'instock' else 'out-of-stock' end;
 
-          insert into public.items (product_id, name, price_mmk, stock, status)
+          insert into public.items (product_id, name, price_usd, stock, status)
           values (p.id, v_name, v_price, v_stock, v_status);
         end loop;
       else
         -- Single item product
         update public.products set product_type = 'single' where id = p.id;
 
-        insert into public.items (product_id, name, price_mmk, stock, status)
-        values (p.id, '', coalesce(p.price_mmk, 0), coalesce(p.stock, 0), coalesce(p.status, 'instock'));
+        insert into public.items (product_id, name, price_usd, stock, status)
+        values (p.id, '', coalesce(p.price_usd, 0.00), coalesce(p.stock, 0), coalesce(p.status, 'instock'));
       end if;
     end if;
   end loop;
 end $$;
+
 
 -- 4. DROP OLD FUNCTION SIGNATURES TO PREVENT POSTGREST RPC OVERLOAD CONFLICTS
 drop function if exists public.validate_coupon(text, jsonb);
@@ -153,12 +155,20 @@ declare
   prod_cat text;
   prod_tags text[];
   v_price integer;
+  v_price_usd numeric(10,2) := 0.00;
   qty integer;
   item_eligible boolean;
   item_total integer;
   eligible_subtotal integer := 0;
   cart_subtotal integer := 0;
   discount_amount integer := 0;
+  current_rate numeric(10,2) := 4500.00;
+  tax_pct numeric(10,2) := 0.00;
+  fee_pct numeric(10,2) := 0.00;
+  fee_multiplier numeric(10,4) := 1.0000;
+  rate_setting text;
+  tax_setting text;
+  fee_setting text;
 begin
   if auth.uid() is null then
     return jsonb_build_object('valid', false, 'message', 'Sign in required to apply coupons');
@@ -168,9 +178,27 @@ begin
     return jsonb_build_object('valid', false, 'message', 'Coupon code is required');
   end if;
 
+  select value into rate_setting from public.store_settings where key = 'usd_to_mmk_rate';
+  if rate_setting is not null and trim(rate_setting) ~ '^[0-9]+(\.[0-9]+)?$' then
+    current_rate := trim(rate_setting)::numeric;
+  end if;
+
+  select value into tax_setting from public.store_settings where key = 'tax_percent';
+  if tax_setting is not null and trim(tax_setting) ~ '^[0-9]+(\.[0-9]+)?$' then
+    tax_pct := trim(tax_setting)::numeric;
+  end if;
+
+  select value into fee_setting from public.store_settings where key = 'service_fee_percent';
+  if fee_setting is not null and trim(fee_setting) ~ '^[0-9]+(\.[0-9]+)?$' then
+    fee_pct := trim(fee_setting)::numeric;
+  end if;
+
+  fee_multiplier := 1.00 + ((tax_pct + fee_pct) / 100.00);
+
   select * into c
   from public.coupons
   where upper(code) = v_code;
+
 
   if c.id is null then
     return jsonb_build_object('valid', false, 'message', 'Invalid coupon code');
@@ -210,15 +238,18 @@ begin
       if item_id_text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
         item_uuid := item_id_text::uuid;
 
-        select i.price_mmk, i.product_id, p.category, p.tags
-        into v_price, prod_uuid, prod_cat, prod_tags
+        select i.price_usd, i.product_id, p.category, p.tags
+        into v_price_usd, prod_uuid, prod_cat, prod_tags
         from public.items i
         join public.products p on p.id = i.product_id
         where i.id = item_uuid;
 
-        if v_price is null then
-          v_price := coalesce((item->>'priceMmk')::integer, 0);
+        if v_price_usd is null then
+          v_price_usd := coalesce((item->>'priceUsd')::numeric, (item->>'price_usd')::numeric, 0.00);
         end if;
+
+        v_price := round(v_price_usd * current_rate * fee_multiplier);
+
 
         if c.discount_type = 'global' then
           item_eligible := true;
@@ -268,7 +299,7 @@ end;
 $$;
 
 
--- 6. CREATE ORDER FROM CART RPC FUNCTION WITH USD BASE PRICING & Dynamic MMK Verification
+-- 6. CREATE ORDER FROM CART RPC FUNCTION WITH USD BASE PRICING & TAX / SERVICE FEE SUPPORT
 create or replace function public.create_order_from_cart(
   cart_items jsonb,
   payment_source_input text,
@@ -301,7 +332,13 @@ declare
   coupon_id_val uuid;
   current_rate numeric(10,2) := 4500.00;
   rate_setting text;
+  tax_setting text;
+  fee_setting text;
+  tax_pct numeric(10,2) := 0.00;
+  fee_pct numeric(10,2) := 0.00;
+  fee_multiplier numeric(10,4) := 1.0000;
 begin
+
   if auth.uid() is null then
     raise exception 'Sign in required';
   end if;
@@ -314,13 +351,25 @@ begin
     raise exception 'Invalid payment source';
   end if;
 
-  -- 0. Fetch current active exchange rate from store_settings
+  -- 0. Fetch active exchange rate, tax percent, and service fee percent from store_settings
   select value into rate_setting from public.store_settings where key = 'usd_to_mmk_rate';
-  if rate_setting is not null and rate_setting ~ '^[0-9]+(\.[0-9]+)?$' then
-    current_rate := rate_setting::numeric;
+  if rate_setting is not null and trim(rate_setting) ~ '^[0-9]+(\.[0-9]+)?$' then
+    current_rate := trim(rate_setting)::numeric;
   end if;
 
-  -- 1. Calculate base subtotal & verify stock from public.items table
+  select value into tax_setting from public.store_settings where key = 'tax_percent';
+  if tax_setting is not null and trim(tax_setting) ~ '^[0-9]+(\.[0-9]+)?$' then
+    tax_pct := trim(tax_setting)::numeric;
+  end if;
+
+  select value into fee_setting from public.store_settings where key = 'service_fee_percent';
+  if fee_setting is not null and trim(fee_setting) ~ '^[0-9]+(\.[0-9]+)?$' then
+    fee_pct := trim(fee_setting)::numeric;
+  end if;
+
+  fee_multiplier := 1.00 + ((tax_pct + fee_pct) / 100.00);
+
+  -- 1. Calculate base subtotal & verify stock from public.items table (All-Inclusive Item Prices)
   for item in select * from jsonb_array_elements(cart_items)
   loop
     item_id_text := item->>'itemId';
@@ -333,8 +382,8 @@ begin
     if item_id_text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
       item_uuid := item_id_text::uuid;
 
-      select i.stock, i.status, i.price_usd, i.price_mmk, p.name
-      into current_stock, item_status, item_price_usd, item_price_mmk, prod_name
+      select i.stock, i.status, i.price_usd, p.name
+      into current_stock, item_status, item_price_usd, prod_name
       from public.items i
       join public.products p on p.id = i.product_id
       where i.id = item_uuid
@@ -347,31 +396,23 @@ begin
       end if;
 
       if item_price_usd is null or item_price_usd = 0.00 then
-        if item_price_mmk is not null and item_price_mmk > 0 then
-          item_price_usd := round((item_price_mmk / current_rate)::numeric, 2);
-        else
-          item_price_usd := coalesce((item->>'priceUsd')::numeric, (item->>'price_usd')::numeric, 0.00);
-        end if;
+        item_price_usd := coalesce((item->>'priceUsd')::numeric, (item->>'price_usd')::numeric, 0.00);
       end if;
 
-      item_price_mmk := round(item_price_usd * current_rate);
+      item_price_mmk := round(item_price_usd * current_rate * fee_multiplier);
       item_total_mmk := item_price_mmk * qty;
       item_total_usd := item_price_usd * qty;
     else
       item_price_usd := coalesce((item->>'priceUsd')::numeric, (item->>'price_usd')::numeric, 0.00);
-      item_price_mmk := round(item_price_usd * current_rate);
-      if item_price_mmk = 0 then
-        item_price_mmk := coalesce((item->>'priceMmk')::integer, 0);
-      end if;
+      item_price_mmk := round(item_price_usd * current_rate * fee_multiplier);
       item_total_mmk := item_price_mmk * qty;
       item_total_usd := item_price_usd * qty;
     end if;
 
+
     server_subtotal_mmk := server_subtotal_mmk + item_total_mmk;
     server_subtotal_usd := server_subtotal_usd + item_total_usd;
   end loop;
-
-  final_total_mmk := server_subtotal_mmk;
 
   -- 2. Server-side coupon verification & discount application
   if coupon_code_input is not null and trim(coupon_code_input) <> '' then
@@ -380,13 +421,17 @@ begin
     if (coupon_validation->>'valid')::boolean is true then
       coupon_id_val := (coupon_validation->>'coupon_id')::uuid;
       discount_amount_mmk := coalesce((coupon_validation->>'discount_amount_mmk')::integer, 0);
-      final_total_mmk := greatest(0, server_subtotal_mmk - discount_amount_mmk);
     else
       raise exception '%', coalesce(coupon_validation->>'message', 'Invalid coupon code');
     end if;
   end if;
 
-  -- 3. Wallet balance check & debit
+  -- 3. Calculate Final Total MMK (All-Inclusive Subtotal - Coupon Discount)
+  final_total_mmk := greatest(0, server_subtotal_mmk - discount_amount_mmk);
+
+
+  -- 4. Wallet balance check & debit
+
   select wallet_balance into current_wallet
   from public.profiles
   where id = auth.uid()

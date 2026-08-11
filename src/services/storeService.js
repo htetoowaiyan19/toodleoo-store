@@ -384,18 +384,22 @@ export async function getExchangeRateSettings() {
       .from('store_settings')
       .select('key, value')
 
-    if (error || !data) return { rate: 4500, lastSyncedAt: null }
+    if (error || !data) return { rate: 4500, taxPercent: 0, serviceFeePercent: 0, lastSyncedAt: null }
 
     const rateRow = data.find((r) => r.key === 'usd_to_mmk_rate')
     const syncRow = data.find((r) => r.key === 'last_auto_sync_at')
+    const taxRow = data.find((r) => r.key === 'tax_percent')
+    const feeRow = data.find((r) => r.key === 'service_fee_percent')
 
     return {
       rate: rateRow && rateRow.value ? Number(rateRow.value) : 4500,
+      taxPercent: taxRow && taxRow.value ? Number(taxRow.value) : 0,
+      serviceFeePercent: feeRow && feeRow.value ? Number(feeRow.value) : 0,
       lastSyncedAt: syncRow ? syncRow.value : null,
     }
   } catch (err) {
     console.warn('Error fetching exchange rate settings:', err)
-    return { rate: 4500, lastSyncedAt: null }
+    return { rate: 4500, taxPercent: 0, serviceFeePercent: 0, lastSyncedAt: null }
   }
 }
 
@@ -412,37 +416,59 @@ export async function updateExchangeRateSettings(newRate) {
   return Number(rateStr)
 }
 
-export async function fetchLiveMarketExchangeRate() {
-  try {
-    const response = await fetch('https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        asset: 'USDT',
-        fiat: 'MMK',
-        tradeType: 'BUY',
-        page: 1,
-        rows: 5,
-        payTypes: [],
-      }),
-    })
+export async function updateFeeSettings({ taxPercent, serviceFeePercent }) {
+  const taxStr = String(Math.max(0, Number(taxPercent || 0)))
+  const feeStr = String(Math.max(0, Number(serviceFeePercent || 0)))
 
-    if (response.ok) {
-      const data = await response.json()
-      if (data && data.data && Array.isArray(data.data) && data.data.length > 0) {
-        const prices = data.data.map((item) => parseFloat(item.adv.price)).filter((p) => p > 3000)
-        if (prices.length > 0) {
-          const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
-          return avgPrice
+  const { error } = await supabase
+    .from('store_settings')
+    .upsert([
+      { key: 'tax_percent', value: taxStr, updated_at: new Date().toISOString() },
+      { key: 'service_fee_percent', value: feeStr, updated_at: new Date().toISOString() },
+    ])
+
+  if (error) throw error
+  return { taxPercent: Number(taxStr), serviceFeePercent: Number(feeStr) }
+}
+
+
+export async function fetchLiveMarketExchangeRate() {
+  // 1. Try CoinGecko USDT/MMK ticker
+  try {
+    const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=mmk')
+    if (cgRes.ok) {
+      const cgData = await cgRes.json()
+      if (cgData && cgData.tether && cgData.tether.mmk) {
+        const rate = Math.round(Number(cgData.tether.mmk))
+        if (rate > 3000) return rate
+      }
+    }
+  } catch (err) {
+    // Silent catch
+  }
+
+  // 2. Try Open Exchange Rates fallback with market factor adjustment (~4300-4500 MMK)
+  try {
+    const erRes = await fetch('https://open.er-api.com/v6/latest/USD')
+    if (erRes.ok) {
+      const erData = await erRes.json()
+      if (erData && erData.rates && erData.rates.MMK) {
+        const rawRate = Number(erData.rates.MMK)
+        // If official CBM rate ~2100 MMK returned, scale to real market trading rate (~4400 MMK)
+        if (rawRate > 1500 && rawRate < 3000) {
+          return Math.round(rawRate * 2.1)
+        } else if (rawRate >= 3000) {
+          return Math.round(rawRate)
         }
       }
     }
   } catch (err) {
-    console.warn('Binance P2P market rate fetch warning:', err)
+    // Silent catch
   }
 
   return 4500
 }
+
 
 export async function syncAutoExchangeRate() {
   try {
@@ -455,10 +481,21 @@ export async function syncAutoExchangeRate() {
   }
 }
 
+function sanitizeUsd(val, exchangeRate = 4500) {
+  let usd = Number(val || 0)
+  while (usd > 1000) {
+    usd = usd / exchangeRate
+  }
+  return Math.max(0, Number(usd.toFixed(2)))
+}
+
 export async function saveProduct(product) {
   const isGroup = product.productType === 'group' || (Array.isArray(product.items) && product.items.length > 1)
 
-  const singlePriceUsd = Number(product.priceUsd !== undefined ? product.priceUsd : product.price_usd || product.price || 0)
+  const singlePriceUsd = sanitizeUsd(
+    product.priceUsd !== undefined ? product.priceUsd : product.price_usd || product.price || 0,
+    product.exchangeRate || 4500,
+  )
   const singlePriceMmk = Math.round(singlePriceUsd * (product.exchangeRate || 4500))
 
   const productPayload = {
@@ -480,6 +517,7 @@ export async function saveProduct(product) {
     required_fields: product.requiredFields || [],
     price_usd: singlePriceUsd,
   }
+
 
 
   let productId = product.id
@@ -517,7 +555,6 @@ export async function saveProduct(product) {
         .update({
           name: '',
           price_usd: singlePriceUsd,
-          price_mmk: singlePriceMmk,
           stock: singleStock,
           status: singleStatus,
           updated_at: new Date().toISOString(),
@@ -534,7 +571,6 @@ export async function saveProduct(product) {
           product_id: productId,
           name: '',
           price_usd: singlePriceUsd,
-          price_mmk: singlePriceMmk,
           stock: singleStock,
           status: singleStatus,
         },
@@ -560,8 +596,11 @@ export async function saveProduct(product) {
     }
 
     for (const it of rawItems) {
-      const itemPriceUsd = Number(it.priceUsd !== undefined ? it.priceUsd : it.price_usd || it.price || 0)
-      const itemPriceMmk = Math.round(itemPriceUsd * (product.exchangeRate || 4500))
+      const itemPriceUsd = sanitizeUsd(
+        it.priceUsd !== undefined ? it.priceUsd : it.price_usd || it.price || 0,
+        product.exchangeRate || 4500,
+      )
+
       const itemStock = Number(it.stock || 0)
       const itemStatus = it.status || (itemStock > 0 ? 'instock' : 'out-of-stock')
 
@@ -571,7 +610,6 @@ export async function saveProduct(product) {
           .update({
             name: it.name || 'Option',
             price_usd: itemPriceUsd,
-            price_mmk: itemPriceMmk,
             stock: itemStock,
             status: itemStatus,
             updated_at: new Date().toISOString(),
@@ -583,7 +621,6 @@ export async function saveProduct(product) {
             product_id: productId,
             name: it.name || 'Option',
             price_usd: itemPriceUsd,
-            price_mmk: itemPriceMmk,
             stock: itemStock,
             status: itemStatus,
           },
@@ -591,6 +628,7 @@ export async function saveProduct(product) {
       }
     }
   }
+
 
   return productId
 }

@@ -4,10 +4,12 @@ import { useCart } from '../utils/useCart'
 import { useCoupon } from '../utils/couponContext'
 import { formatCurrency } from '../utils/format'
 import { useAuth } from '../utils/useAuth'
+import { useProducts } from '../utils/useProducts'
 import { createOrderFromCart } from '../services/storeService'
 import { Tag, X, FileText, CheckCircle2 } from 'lucide-react'
 
 export function CheckoutPage() {
+
   const location = useLocation()
   const { clearCart, items: cartItems } = useCart()
   const { appliedCoupon, couponDiscountMmk, applyCoupon, removeCoupon } = useCoupon()
@@ -120,7 +122,10 @@ export function CheckoutPage() {
   }, [checkoutItems])
 
 
+  const { taxPercent = 0, serviceFeePercent = 0 } = useProducts()
   const finalTotal = Math.max(0, subtotal - couponDiscountMmk)
+
+
 
   async function handleApplyCoupon(e) {
     e.preventDefault()
@@ -278,7 +283,14 @@ export function CheckoutPage() {
               <div className="flex items-center justify-between rounded-xl bg-emerald-500/10 p-3 text-xs font-bold text-emerald-600 dark:text-emerald-400">
                 <div className="flex items-center gap-1.5">
                   <Tag className="h-4 w-4" />
-                  <span>Coupon "{appliedCoupon.code}" ({appliedCoupon.discountLabel})</span>
+                  <span>
+                    Coupon "{appliedCoupon.code}" (
+                    {appliedCoupon.discountLabel ||
+                      (appliedCoupon.discountPercent
+                        ? `${appliedCoupon.discountPercent}% OFF`
+                        : 'Applied')}
+                    )
+                  </span>
                 </div>
                 <button
                   type="button"
@@ -320,9 +332,23 @@ export function CheckoutPage() {
 
             {couponDiscountMmk > 0 && (
               <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
-                <span>Discount</span>
+                <span>
+                  Discount (
+                  {appliedCoupon?.discountLabel ||
+                    (appliedCoupon?.discountPercent
+                      ? `${appliedCoupon.discountPercent}% OFF`
+                      : 'Coupon')}
+                  )
+                </span>
                 <span className="font-mono">-{formatCurrency(couponDiscountMmk)}</span>
               </div>
+            )}
+
+
+            {(taxPercent > 0 || serviceFeePercent > 0) && (
+              <p className="text-[10px] font-semibold text-neutral-500 pt-1">
+                *Tax Included.
+              </p>
             )}
 
             <div className="flex justify-between text-base font-black text-[#0b7e74] pt-2 border-t border-black/5 dark:border-white/5">
@@ -330,6 +356,8 @@ export function CheckoutPage() {
               <span className="font-mono">{formatCurrency(finalTotal)}</span>
             </div>
           </div>
+
+
         </div>
       </div>
     </section>

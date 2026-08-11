@@ -9,8 +9,9 @@ import { ProductFormModal } from '../components/admin/ProductFormModal'
 import { Plus, Search, Edit3, Trash2, Tag, Layers, Package } from 'lucide-react'
 
 export function AdminProductsPage() {
-  const { products, refreshProducts } = useProducts()
+  const { products, refreshProducts, formatCurrency, formatPriceRange } = useProducts()
   const [search, setSearch] = useState('')
+
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -141,18 +142,25 @@ export function AdminProductsPage() {
                   const isGroup = product.productType === 'group' || (product.items && product.items.length > 1)
                   const itemsList = Array.isArray(product.items) ? product.items : []
 
-                  let minP = product.priceMmk || product.price || 0
-                  let maxP = product.priceMmk || product.price || 0
+                  let minMmk = product.priceMmk || product.price || 0
+                  let maxMmk = product.priceMmk || product.price || 0
+                  let minUsd = product.priceUsd || 0
+                  let maxUsd = product.priceUsd || 0
                   let totalStock = product.stock || 0
 
                   if (isGroup && itemsList.length > 0) {
-                    const prices = itemsList.map((i) => Number(i.priceMmk || i.price || 0))
-                    minP = Math.min(...prices)
-                    maxP = Math.max(...prices)
+                    const mmkPrices = itemsList.map((i) => Number(i.priceMmk || i.price || 0))
+                    const usdPrices = itemsList.map((i) => Number(i.priceUsd || 0))
+                    minMmk = Math.min(...mmkPrices)
+                    maxMmk = Math.max(...mmkPrices)
+                    minUsd = Math.min(...usdPrices)
+                    maxUsd = Math.max(...usdPrices)
                     totalStock = itemsList.reduce((sum, i) => sum + Number(i.stock || 0), 0)
                   }
 
-                  const isRange = isGroup && minP < maxP
+                  const isRange = isGroup && minMmk < maxMmk
+                  const isUsdRange = isGroup && minUsd < maxUsd
+
                   const statusDetails = getProductStatusDetails(product.status, totalStock)
 
                   return (
@@ -199,8 +207,19 @@ export function AdminProductsPage() {
                       </td>
 
                       <td className="p-3 font-mono font-black text-sm text-emerald-600 dark:text-emerald-400">
-                        {isRange ? formatPriceRange(minP, maxP) : formatCurrency(minP)}
+                        <div className="flex flex-col">
+                          <span>
+                            {isRange ? formatPriceRange(minMmk, maxMmk) : formatCurrency(minMmk)}
+                          </span>
+                          <span className="text-[10px] font-normal text-neutral-400">
+                            {isUsdRange
+                              ? `$${minUsd.toFixed(2)} - $${maxUsd.toFixed(2)} USD`
+                              : `$${minUsd.toFixed(2)} USD`}
+                          </span>
+                        </div>
                       </td>
+
+
 
                       <td className="p-3">
                         <div className="flex items-center gap-1.5">

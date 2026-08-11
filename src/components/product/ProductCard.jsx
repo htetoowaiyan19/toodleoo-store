@@ -1,27 +1,30 @@
 import { Link, useNavigate } from 'react-router'
 
 import { useCart } from '../../utils/useCart'
-import { formatCurrency, formatPriceRange } from '../../utils/format'
+import { useProducts } from '../../utils/useProducts'
 import { getProductStatusDetails } from '../../utils/productStatus'
 import { ProductImage } from '../common/ProductImage'
 
 export function ProductCard({ product }) {
   const { addToCart } = useCart()
   const navigate = useNavigate()
+  const { formatCurrency, formatPriceRange } = useProducts()
+
 
   const itemsList = Array.isArray(product.items) ? product.items : []
   const isGroup = product.productType === 'group' || itemsList.length > 1
 
-  let minPrice = product.priceMmk || product.price || 0
-  let maxPrice = product.priceMmk || product.price || 0
+  let minPriceMmk = product.priceMmk || product.price || 0
+  let maxPriceMmk = product.priceMmk || product.price || 0
 
   if (isGroup && itemsList.length > 0) {
-    const prices = itemsList.map((i) => Number(i.priceMmk || 0))
-    minPrice = Math.min(...prices)
-    maxPrice = Math.max(...prices)
+    const prices = itemsList.map((i) => Number(i.priceMmk || i.price || 0))
+    minPriceMmk = Math.min(...prices)
+    maxPriceMmk = Math.max(...prices)
   }
 
-  const isRange = isGroup && minPrice < maxPrice
+  const isRange = isGroup && minPriceMmk < maxPriceMmk
+
 
   // Select lowest price in-stock item for default click
   const defaultItem = isGroup
@@ -105,15 +108,13 @@ export function ProductCard({ product }) {
           <div className="flex flex-col">
             <span className="text-xs sm:text-xl font-black font-mono">
               {isRange
-                ? formatPriceRange(minPrice, maxPrice)
-                : formatCurrency(minPrice)}
+                ? formatPriceRange(minPriceMmk, maxPriceMmk)
+                : formatCurrency(minPriceMmk)}
+
             </span>
-            {product.priceUsd > 0 && (
-              <span className="text-[10px] sm:text-xs font-bold text-neutral-400">
-                (${product.priceUsd.toFixed(2)} USD)
-              </span>
-            )}
           </div>
+
+
 
 
           {/* ACTION BUTTONS */}

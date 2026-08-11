@@ -11,8 +11,9 @@ import { ProductImage } from '../components/common/ProductImage'
 export function ProductPage() {
   const { slug } = useParams()
   const { addToCart } = useCart()
-  const { products } = useProducts()
+  const { products, formatCurrency } = useProducts()
   const navigate = useNavigate()
+
   const [isExpanded, setIsExpanded] = useState(false)
 
   const product = products.find((item) => item.slug === slug)
@@ -156,12 +157,8 @@ export function ProductPage() {
           <span className="text-4xl font-black font-mono">
             {formatCurrency(displayPrice)}
           </span>
-          {activeItem?.priceUsd > 0 && (
-            <span className="text-sm font-bold text-neutral-500 dark:text-neutral-400">
-              (${activeItem.priceUsd.toFixed(2)} USD)
-            </span>
-          )}
         </div>
+
 
 
         {/* ACTION BUTTONS */}

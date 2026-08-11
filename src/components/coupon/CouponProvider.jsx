@@ -13,16 +13,26 @@ export function CouponProvider({ children }) {
     try {
       const res = await validateCouponCode(code, cartItems)
       if (res && res.valid) {
+        const discountPct = Number(res.discount_percent || 0)
+        const discountMmk = Number(res.discount_amount_mmk || 0)
+        const label = discountPct > 0
+          ? `${discountPct}% OFF`
+          : discountMmk > 0
+          ? `MMK ${discountMmk.toLocaleString()} OFF`
+          : 'Discount Applied'
+
         setAppliedCoupon({
           id: res.coupon_id,
           code: res.code,
-          discountPercent: res.discount_percent,
+          discountPercent: discountPct,
           discountType: res.discount_type,
-          discountAmountMmk: res.discount_amount_mmk || 0,
+          discountAmountMmk: discountMmk,
+          discountLabel: label,
           message: res.message,
         })
         return { success: true, message: res.message || 'Coupon applied successfully!' }
       } else {
+
         setAppliedCoupon(null)
         return { success: false, message: res?.message || 'Invalid coupon code.' }
       }
