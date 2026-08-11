@@ -29,6 +29,8 @@ import {
 } from '../services/storeService'
 import { supabase } from '../supabase'
 
+import { getLocalPendingOrderById, removeLocalPendingOrder } from '../utils/localOrders'
+
 export function OrderDetailPage() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -47,11 +49,12 @@ export function OrderDetailPage() {
     [user?.id],
   )
 
-  const order = orders.find((o) => o.id === id)
+  const localDraft = useMemo(() => (id?.startsWith('draft-') ? getLocalPendingOrderById(id) : null), [id])
+  const order = localDraft || orders.find((o) => o.id === id)
 
   // Fetch payment transfer proof if manual payment
   useEffect(() => {
-    if (!id || !user) return
+    if (!id || !user || id.startsWith('draft-')) return
     let active = true
 
     async function loadPayment() {
@@ -95,6 +98,14 @@ export function OrderDetailPage() {
 
   async function handleCancelOrder() {
     if (!confirm('Are you sure you want to cancel this pending order?')) return
+
+    if (order?.isLocalDraft || order?.id?.startsWith('draft-')) {
+      removeLocalPendingOrder(order.id)
+      setFeedback('Pending draft order has been cancelled and deleted.')
+      setTimeout(() => navigate('/orders'), 900)
+      return
+    }
+
     try {
       await cancelPendingOrder(order.id)
       setFeedback('Pending order has been cancelled.')
@@ -103,6 +114,7 @@ export function OrderDetailPage() {
       setFeedback(err.message || 'Failed to cancel order.')
     }
   }
+
 
   if (!order) {
     return (

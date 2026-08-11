@@ -21,7 +21,7 @@ export function calculateContactFeePercent(contactMethods = []) {
   return fee
 }
 
-export function ContactMethodsEditor({ initialMethods = [], onSave, isSaving = false, title = 'Contact Information Priorities (Up to 3)' }) {
+export function ContactMethodsEditor({ initialMethods = [], onSave, isSaving = false, title = 'Contact Information Priorities' }) {
   const [methods, setMethods] = useState(() => {
     if (Array.isArray(initialMethods) && initialMethods.length > 0) {
       return initialMethods.slice(0, 3).map((item, idx) => ({
@@ -77,9 +77,9 @@ export function ContactMethodsEditor({ initialMethods = [], onSave, isSaving = f
   }
 
   const PRIORITY_BADGES = [
-    { label: '1st Priority (Primary)', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
-    { label: '2nd Priority (Secondary)', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
-    { label: '3rd Priority (Backup)', color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' },
+    { label: 'Primary', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
+    { label: 'Secondary', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
+    { label: 'Backup', color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' },
   ]
 
   return (
@@ -94,12 +94,10 @@ export function ContactMethodsEditor({ initialMethods = [], onSave, isSaving = f
 
         {activeFeePercent > 0 ? (
           <span className="self-start sm:self-auto rounded-full bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-600 border border-amber-500/20 dark:text-amber-400">
-            +{activeFeePercent}% Contact Surcharge Fee
+            +{activeFeePercent}% Fee
           </span>
         ) : (
-          <span className="self-start sm:self-auto rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600 border border-emerald-500/20 dark:text-emerald-400">
-            0% Fee (Free Methods Selected)
-          </span>
+          <span></span>
         )}
       </div>
 

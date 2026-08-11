@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { createManualPayment, getAdminWalletAccount } from '../services/storeService'
+import { createManualPayment, createOrderFromCart, getAdminWalletAccount } from '../services/storeService'
 import { formatCurrency } from '../utils/format'
 import { useAuth } from '../utils/useAuth'
+import { getLocalPendingOrderById, removeLocalPendingOrder } from '../utils/localOrders'
 
 export function PaymentPage() {
   const { user } = useAuth()
@@ -27,21 +28,44 @@ export function PaymentPage() {
 
   async function handleSubmit(event) {
     event.preventDefault()
-    setStatus('Uploading receipt...')
-    await createManualPayment({
-      amountMmk: Number(amountMmk),
-      orderId,
-      purpose,
-      receiptFile,
-      user,
-    })
-    setTimeout(() => {
-      if (purpose === 'order_payment') {
-        navigate(`/order-success?orderId=${orderId || ''}&method=manual&amount=${amountMmk}&type=order`)
-      } else {
-        navigate(`/order-success?method=manual&amount=${amountMmk}&type=wallet_topup`)
+    setStatus('Processing order and uploading receipt...')
+
+    try {
+      let finalOrderId = orderId
+
+      // If this is a local draft order, create real order in DB now that receipt is being submitted
+      if (purpose === 'order_payment' && orderId && orderId.startsWith('draft-')) {
+        const draftOrder = getLocalPendingOrderById(orderId)
+        if (draftOrder && Array.isArray(draftOrder.items)) {
+          finalOrderId = await createOrderFromCart({
+            items: draftOrder.items,
+            paymentSource: 'manual_payment',
+            couponCode: draftOrder.couponCode || null,
+            contactMethods: draftOrder.contactMethods || draftOrder.contact_methods || [],
+          })
+          removeLocalPendingOrder(orderId)
+        }
       }
-    }, 900)
+
+      await createManualPayment({
+        amountMmk: Number(amountMmk),
+        orderId: finalOrderId,
+        purpose,
+        receiptFile,
+        user,
+      })
+
+      setTimeout(() => {
+        if (purpose === 'order_payment') {
+          navigate(`/order-success?orderId=${finalOrderId || ''}&method=manual&amount=${amountMmk}&type=order`)
+        } else {
+          navigate(`/order-success?method=manual&amount=${amountMmk}&type=wallet_topup`)
+        }
+      }, 900)
+    } catch (err) {
+      console.error('Error submitting payment:', err)
+      setStatus(err.message || 'Failed to submit payment.')
+    }
   }
 
   return (

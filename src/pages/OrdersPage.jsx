@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import {
   CheckCircle2,
@@ -8,21 +8,32 @@ import {
   FileText,
   Package,
   Search,
+  Trash2,
   XCircle,
 } from 'lucide-react'
 import { formatCurrency } from '../utils/format'
 import { useAuth } from '../utils/useAuth'
 import { subscribeUserCollection } from '../services/storeService'
+import { getLocalPendingOrders, removeLocalPendingOrder } from '../utils/localOrders'
 
 export function OrdersPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [orders, setOrders] = useState([])
+  const [localDrafts, setLocalDrafts] = useState(() => getLocalPendingOrders())
   const [search, setSearch] = useState('')
 
   useEffect(() => subscribeUserCollection('orders', user.id, setOrders), [user.id])
 
-  const filteredOrders = orders.filter((order) => {
+  const combinedOrders = useMemo(() => {
+    const remoteIds = new Set(orders.map((o) => o.id))
+    const activeDrafts = localDrafts.filter((o) => !remoteIds.has(o.id))
+    return [...activeDrafts, ...orders].sort(
+      (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0),
+    )
+  }, [orders, localDrafts])
+
+  const filteredOrders = combinedOrders.filter((order) => {
     const q = search.trim().toLowerCase()
     if (!q) return true
     return (
@@ -30,6 +41,14 @@ export function OrdersPage() {
       (order.items && order.items.some((i) => i.name.toLowerCase().includes(q)))
     )
   })
+
+  function handleCancelLocalOrder(draftId) {
+    if (confirm('Are you sure you want to cancel and delete this pending order draft?')) {
+      removeLocalPendingOrder(draftId)
+      setLocalDrafts(getLocalPendingOrders())
+    }
+  }
+
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 space-y-6">
@@ -154,10 +173,30 @@ export function OrdersPage() {
 
                       {/* ACTION */}
                       <td className="p-3 text-right">
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-[#0b7e74] hover:underline">
-                          View Details <ChevronRight className="h-3.5 w-3.5" />
-                        </span>
+                        {order.isLocalDraft || order.id.startsWith('draft-') ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-[#0b7e74] hover:underline">
+                              Pay / View <ChevronRight className="h-3.5 w-3.5" />
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCancelLocalOrder(order.id)
+                              }}
+                              className="inline-flex items-center gap-1 rounded-xl bg-rose-500/10 px-2.5 py-1 text-[11px] font-bold text-rose-500 hover:bg-rose-500 hover:text-white transition cursor-pointer"
+                              title="Cancel and delete pending draft order"
+                            >
+                              <Trash2 className="h-3 w-3" /> Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-[#0b7e74] hover:underline">
+                            View Details <ChevronRight className="h-3.5 w-3.5" />
+                          </span>
+                        )}
                       </td>
+
                     </tr>
                   )
                 })}

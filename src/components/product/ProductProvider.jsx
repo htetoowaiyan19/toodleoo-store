@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../supabase'
 import { products as fallbackProducts } from '../../data/products'
 import { ProductContext } from '../../utils/productContext'
-import { getExchangeRateSettings, syncAutoExchangeRate, updateFeeSettings } from '../../services/storeService'
+import { getExchangeRateSettings, updateFeeSettings } from '../../services/storeService'
 import {
   formatCurrency as globalFormatCurrency,
   formatUsdToMmk as globalFormatUsdToMmk,
@@ -130,30 +130,38 @@ export function ProductProvider({ children }) {
   )
   const [loading, setLoading] = useState(true)
 
+  const settingsRef = useRef({ rate: 4500, taxPercent: 0, serviceFeePercent: 0 })
+
   const loadExchangeRate = useCallback(async () => {
     const settings = await getExchangeRateSettings()
-    if (settings.rate) setExchangeRate(settings.rate)
-    if (settings.taxPercent !== undefined) setTaxPercent(settings.taxPercent)
-    if (settings.serviceFeePercent !== undefined) setServiceFeePercent(settings.serviceFeePercent)
+    const rate = settings.rate || 4500
+    const tax = settings.taxPercent || 0
+    const fee = settings.serviceFeePercent || 0
+
+    setExchangeRate(rate)
+    setTaxPercent(tax)
+    setServiceFeePercent(fee)
     if (settings.lastSyncedAt) setLastSyncedAt(settings.lastSyncedAt)
-    return {
-      rate: settings.rate || 4500,
-      taxPercent: settings.taxPercent || 0,
-      serviceFeePercent: settings.serviceFeePercent || 0,
-    }
+
+    settingsRef.current = { rate, taxPercent: tax, serviceFeePercent: fee }
+    return settingsRef.current
   }, [])
 
-  const loadProducts = useCallback(async (activeRate = exchangeRate, activeTax = taxPercent, activeFee = serviceFeePercent) => {
+  const fetchAndNormalizeProducts = useCallback(async (activeRate, activeTax, activeFee) => {
+    const rateToUse = activeRate ?? settingsRef.current.rate
+    const taxToUse = activeTax ?? settingsRef.current.taxPercent
+    const feeToUse = activeFee ?? settingsRef.current.serviceFeePercent
+
     const { data, error } = await supabase
       .from('products')
       .select('*, items(*)')
       .order('updated_at', { ascending: false })
 
     if (!error && Array.isArray(data)) {
-      setProducts(data.map((p) => normalizeProduct(p, activeRate, activeTax, activeFee)))
+      setProducts(data.map((p) => normalizeProduct(p, rateToUse, taxToUse, feeToUse)))
     }
     setLoading(false)
-  }, [exchangeRate, taxPercent, serviceFeePercent])
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -161,14 +169,7 @@ export function ProductProvider({ children }) {
     async function init() {
       const settings = await loadExchangeRate()
       if (active) {
-        await loadProducts(settings.rate, settings.taxPercent, settings.serviceFeePercent)
-        // Background Market Rate Auto-Sync
-        syncAutoExchangeRate().then((newRate) => {
-          if (active && newRate && newRate !== settings.rate) {
-            setExchangeRate(newRate)
-            loadProducts(newRate, settings.taxPercent, settings.serviceFeePercent)
-          }
-        })
+        await fetchAndNormalizeProducts(settings.rate, settings.taxPercent, settings.serviceFeePercent)
       }
     }
 
@@ -176,11 +177,15 @@ export function ProductProvider({ children }) {
 
     const channelProd = supabase
       .channel('products-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => loadProducts(exchangeRate, taxPercent, serviceFeePercent))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => loadProducts(exchangeRate, taxPercent, serviceFeePercent))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+        fetchAndNormalizeProducts()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => {
+        fetchAndNormalizeProducts()
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'store_settings' }, async () => {
-        const freshSettings = await loadExchangeRate()
-        loadProducts(freshSettings.rate, freshSettings.taxPercent, freshSettings.serviceFeePercent)
+        const fresh = await loadExchangeRate()
+        fetchAndNormalizeProducts(fresh.rate, fresh.taxPercent, fresh.serviceFeePercent)
       })
       .subscribe()
 
@@ -188,12 +193,13 @@ export function ProductProvider({ children }) {
       active = false
       supabase.removeChannel(channelProd)
     }
-  }, [exchangeRate, taxPercent, serviceFeePercent, loadExchangeRate, loadProducts])
+  }, [loadExchangeRate, fetchAndNormalizeProducts])
 
   const convertUsdToMmk = useCallback((usd) => {
     const feeMultiplier = 1 + (Number(taxPercent || 0) + Number(serviceFeePercent || 0)) / 100
     return Math.round(Number(usd || 0) * exchangeRate * feeMultiplier)
   }, [exchangeRate, taxPercent, serviceFeePercent])
+
 
   const formatCurrency = useCallback((mmkValue) => {
     return globalFormatCurrency(mmkValue)
