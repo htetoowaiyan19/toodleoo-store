@@ -288,7 +288,7 @@ export async function createManualPayment({
   return payment.id
 }
 
-export async function createOrderFromCart({ items, paymentSource, couponCode = null }) {
+export async function createOrderFromCart({ items, paymentSource, couponCode = null, contactMethods = [] }) {
   const normalizedItems = items.map((item) => ({
     id: item.itemId || item.id,
     itemId: item.itemId || item.id,
@@ -305,12 +305,14 @@ export async function createOrderFromCart({ items, paymentSource, couponCode = n
     cart_items: normalizedItems,
     payment_source_input: paymentSource,
     coupon_code_input: couponCode || null,
+    contact_methods_input: contactMethods || [],
   })
 
   if (error) throw error
 
   return data
 }
+
 
 
 

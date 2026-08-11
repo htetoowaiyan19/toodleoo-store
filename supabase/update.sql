@@ -18,7 +18,20 @@ begin
   if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='products' and column_name='price_usd') then
     alter table public.products add column price_usd numeric(10,2) not null default 0.00 check (price_usd >= 0);
   end if;
+
+  if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='profiles' and column_name='contact_methods') then
+    alter table public.profiles add column contact_methods jsonb default '[]'::jsonb;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='orders' and column_name='contact_methods') then
+    alter table public.orders add column contact_methods jsonb default '[]'::jsonb;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='orders' and column_name='contact_fee_percent') then
+    alter table public.orders add column contact_fee_percent numeric(10,2) default 0.00;
+  end if;
 end $$;
+
 
 -- STORE SETTINGS TABLE (EXCHANGE RATES & APP CONFIG)
 create table if not exists public.store_settings (
@@ -299,11 +312,12 @@ end;
 $$;
 
 
--- 6. CREATE ORDER FROM CART RPC FUNCTION WITH USD BASE PRICING & TAX / SERVICE FEE SUPPORT
+-- 6. CREATE ORDER FROM CART RPC FUNCTION WITH USD BASE PRICING, TAX / SERVICE FEE, & CONTACT METHOD SURCHARGE SUPPORT
 create or replace function public.create_order_from_cart(
   cart_items jsonb,
   payment_source_input text,
-  coupon_code_input text default null
+  coupon_code_input text default null,
+  contact_methods_input jsonb default '[]'::jsonb
 )
 returns uuid
 language plpgsql
@@ -326,6 +340,9 @@ declare
   item_total_usd numeric(10,2);
   server_subtotal_mmk integer := 0;
   server_subtotal_usd numeric(10,2) := 0.00;
+  net_total_mmk integer := 0;
+  contact_fee_pct numeric(10,2) := 0.00;
+  contact_fee_mmk integer := 0;
   final_total_mmk integer := 0;
   discount_amount_mmk integer := 0;
   coupon_validation jsonb;
@@ -426,12 +443,25 @@ begin
     end if;
   end if;
 
-  -- 3. Calculate Final Total MMK (All-Inclusive Subtotal - Coupon Discount)
-  final_total_mmk := greatest(0, server_subtotal_mmk - discount_amount_mmk);
+  -- 3. Calculate Contact Priority Surcharge Fee (+5% Messages, +8% Phone)
+  if contact_methods_input is not null and jsonb_typeof(contact_methods_input) = 'array' then
+    if exists (select 1 from jsonb_array_elements(contact_methods_input) elem where elem->>'type' = 'Messages') then
+      contact_fee_pct := contact_fee_pct + 5.00;
+    end if;
+    if exists (select 1 from jsonb_array_elements(contact_methods_input) elem where elem->>'type' = 'Phone') then
+      contact_fee_pct := contact_fee_pct + 8.00;
+    end if;
+  end if;
+
+  -- 4. Calculate Final Total MMK (Net Subtotal + Contact Surcharge Fee)
+  net_total_mmk := greatest(0, server_subtotal_mmk - discount_amount_mmk);
+  if contact_fee_pct > 0 then
+    contact_fee_mmk := round(net_total_mmk * (contact_fee_pct / 100.00))::integer;
+  end if;
+  final_total_mmk := net_total_mmk + contact_fee_mmk;
 
 
-  -- 4. Wallet balance check & debit
-
+  -- 5. Wallet balance check & debit
   select wallet_balance into current_wallet
   from public.profiles
   where id = auth.uid()
@@ -447,7 +477,7 @@ begin
     where id = auth.uid();
   end if;
 
-  -- 4. Create Order
+  -- 6. Create Order
   insert into public.orders (
     user_id,
     user_email,
@@ -457,7 +487,9 @@ begin
     exchange_rate_used,
     payment_source,
     status,
-    is_submitted
+    is_submitted,
+    contact_methods,
+    contact_fee_percent
   )
   values (
     auth.uid(),
@@ -468,9 +500,12 @@ begin
     current_rate,
     payment_source_input,
     case when payment_source_input = 'wallet' then 'paid' else 'pending_payment' end,
-    case when payment_source_input = 'wallet' then true else false end
+    case when payment_source_input = 'wallet' then true else false end,
+    coalesce(contact_methods_input, '[]'::jsonb),
+    contact_fee_pct
   )
   returning id into order_id;
+
 
 
   -- 5. Record Coupon Redemption & Increment Coupon Usage

@@ -698,6 +698,50 @@ export function AdminOrdersPage() {
                 )
               })()}
 
+              {/* CUSTOMER CONTACT PRIORITIES FOR 2FA & SUPPORT */}
+
+              {(() => {
+                const contactMethods = inspectTarget.contactMethods || inspectTarget.contact_methods
+                if (!Array.isArray(contactMethods) || contactMethods.length === 0) return null
+
+                const feePct = Number(inspectTarget.contactFeePercent || inspectTarget.contact_fee_percent || 0)
+
+                return (
+                  <div className="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                        <Phone className="h-4 w-4" /> Contact Priorities (2FA & Support)
+                      </h4>
+                      {feePct > 0 && (
+                        <span className="rounded-full bg-purple-500/10 px-2.5 py-0.5 text-[10px] font-bold text-purple-600 border border-purple-500/20 dark:text-purple-300">
+                          +{feePct}% Fee Included
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="rounded-xl border border-black/10 bg-white p-3 space-y-2 dark:border-white/10 dark:bg-neutral-900">
+                      {contactMethods.map((cm, idx) => (
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs font-mono border-b border-black/5 dark:border-white/5 pb-1.5 last:border-0 last:pb-0 gap-1">
+                          <span className="font-bold text-neutral-500">
+                            {idx === 0 ? '🥇 1st Priority' : idx === 1 ? '🥈 2nd Priority' : '🥉 3rd Priority'} ({cm.type}):
+                          </span>
+                          <span className="font-black text-purple-600 dark:text-purple-300 select-all">
+                            {cm.type === 'Phone' || cm.type === 'Viber' ? (
+                              <a href={`tel:${cm.value}`} className="hover:underline">{cm.value}</a>
+                            ) : cm.type === 'Email' ? (
+                              <a href={`mailto:${cm.value}`} className="hover:underline">{cm.value}</a>
+                            ) : (
+                              cm.value
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+
+
 
               {/* PAYMENT RECEIPT SECTION */}
               {(inspectTarget.payment || inspectTarget.receiptImagePath || inspectTarget.paymentSource || inspectTarget.isPayment) && (

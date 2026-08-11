@@ -15,9 +15,11 @@ async function fetchProfile(userId) {
         ...data,
         displayName: data.display_name,
         walletBalance: data.wallet_balance,
+        contactMethods: data.contact_methods || [],
       }
     : null
 }
+
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
@@ -82,6 +84,29 @@ export function AuthProvider({ children }) {
     setProfile(nextProfile)
   }
 
+  const updateProfile = async (updates) => {
+    if (!user) return null
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+    if (data) {
+      const nextProfile = {
+        ...data,
+        displayName: data.display_name,
+        walletBalance: data.wallet_balance,
+        contactMethods: data.contact_methods || [],
+      }
+      setProfile(nextProfile)
+      return nextProfile
+    }
+    return null
+  }
+
   const value = useMemo(
     () => ({
       isAdmin: ['owner', 'staff'].includes(profile?.role),
@@ -89,6 +114,8 @@ export function AuthProvider({ children }) {
       loading,
       profile,
       refreshProfile,
+      updateProfile,
+
       signInWithGoogle: async () => {
 
         const { data, error } = await supabase.auth.signInWithOAuth({

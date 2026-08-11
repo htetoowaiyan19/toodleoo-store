@@ -394,8 +394,40 @@ export function OrderDetailPage() {
             )}
           </div>
         </div>
-
       </div>
+
+      {/* SELECTED CONTACT METHOD PRIORITIES CARD */}
+      {(() => {
+        const contactMethods = order.contactMethods || order.contact_methods
+        if (!Array.isArray(contactMethods) || contactMethods.length === 0) return null
+
+        const feePct = Number(order.contactFeePercent || order.contact_fee_percent || 0)
+
+        return (
+          <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-neutral-900 space-y-3">
+            <div className="flex items-center justify-between border-b border-black/5 pb-3 dark:border-white/5">
+              <h3 className="text-base font-black">Contact Method Priorities (For 2FA & Support)</h3>
+              {feePct > 0 && (
+                <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-600 border border-amber-500/20 dark:text-amber-400">
+                  +{feePct}% Fee Included
+                </span>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              {contactMethods.map((cm, idx) => (
+                <div key={idx} className="rounded-2xl border border-black/5 bg-neutral-50 p-4 dark:border-white/5 dark:bg-neutral-950/60 font-mono">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                    {idx === 0 ? '🥇 1st Priority' : idx === 1 ? '🥈 2nd Priority' : '🥉 3rd Priority'}
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-neutral-800 dark:text-neutral-200">{cm.type}</p>
+                  <p className="mt-0.5 text-xs text-[#0b7e74] font-black truncate">{cm.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
     </section>
   )
 }

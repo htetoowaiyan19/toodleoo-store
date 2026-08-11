@@ -4,13 +4,26 @@ import { useAuth } from '../utils/useAuth'
 import { useTheme } from '../utils/useTheme'
 import { formatCurrency } from '../utils/format'
 import { clearUserNotifications, deleteNotification, subscribeUserCollection } from '../services/storeService'
+import { ContactMethodsEditor } from '../components/account/ContactMethodsEditor'
 import { Trash2, X } from 'lucide-react'
 
 
 export function AccountPage() {
-  const { isAdmin, isOwner, profile, signOutUser, user } = useAuth()
+  const { isAdmin, isOwner, profile, signOutUser, user, updateProfile } = useAuth()
   const { isDarkMode, toggleDarkMode } = useTheme()
   const [notifications, setNotifications] = useState([])
+  const [isSavingContacts, setIsSavingContacts] = useState(false)
+
+  async function handleSaveContactMethods(methods) {
+    setIsSavingContacts(true)
+    try {
+      await updateProfile({ contact_methods: methods })
+    } finally {
+      setIsSavingContacts(false)
+    }
+  }
+
+
 
   // QoL Preference settings (stored in localStorage)
   const [preferences, setPreferences] = useState(() => {
@@ -250,8 +263,19 @@ export function AccountPage() {
                 />
               </div>
             </div>
+
+            {/* CONTACT METHODS PRIORITIES */}
+            <div className="rounded-2xl border border-black/5 bg-neutral-50 p-5 dark:border-white/5 dark:bg-neutral-950/60">
+              <ContactMethodsEditor
+                initialMethods={profile?.contactMethods || []}
+                onSave={handleSaveContactMethods}
+                isSaving={isSavingContacts}
+              />
+            </div>
           </div>
         </div>
+
+
 
         {/* NOTIFICATIONS FEED SIDEBAR */}
         <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-neutral-900">

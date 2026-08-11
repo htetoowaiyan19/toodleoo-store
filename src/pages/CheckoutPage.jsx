@@ -6,6 +6,7 @@ import { formatCurrency } from '../utils/format'
 import { useAuth } from '../utils/useAuth'
 import { useProducts } from '../utils/useProducts'
 import { createOrderFromCart } from '../services/storeService'
+import { ContactMethodsEditor, calculateContactFeePercent } from '../components/account/ContactMethodsEditor'
 import { Tag, X, FileText, CheckCircle2 } from 'lucide-react'
 
 export function CheckoutPage() {
@@ -13,10 +14,18 @@ export function CheckoutPage() {
   const location = useLocation()
   const { clearCart, items: cartItems } = useCart()
   const { appliedCoupon, couponDiscountMmk, applyCoupon, removeCoupon } = useCoupon()
-  const { profile, refreshProfile } = useAuth()
+  const { profile, refreshProfile, updateProfile } = useAuth()
   const navigate = useNavigate()
 
   const directItemRaw = location.state?.directItem
+
+  // Contact priorities state initialized from user profile
+  const [contactMethods, setContactMethods] = useState(() => {
+    if (Array.isArray(profile?.contactMethods) && profile.contactMethods.length > 0) {
+      return profile.contactMethods
+    }
+    return [{ priority: 1, type: 'Email', value: profile?.email || '' }]
+  })
 
   // If directItem is passed via navigation, process single item checkout without touching cart
   const checkoutItems = directItemRaw
@@ -123,9 +132,18 @@ export function CheckoutPage() {
 
 
   const { taxPercent = 0, serviceFeePercent = 0 } = useProducts()
-  const finalTotal = Math.max(0, subtotal - couponDiscountMmk)
 
+  const contactFeePercent = calculateContactFeePercent(contactMethods)
+  const baseTotal = Math.max(0, subtotal - couponDiscountMmk)
+  const contactFeeMmk = contactFeePercent > 0 ? Math.round(baseTotal * (contactFeePercent / 100)) : 0
+  const finalTotal = baseTotal + contactFeeMmk
 
+  async function handleSaveContacts(updatedMethods) {
+    setContactMethods(updatedMethods)
+    if (profile && updateProfile) {
+      await updateProfile({ contact_methods: updatedMethods })
+    }
+  }
 
   async function handleApplyCoupon(e) {
     e.preventDefault()
@@ -162,6 +180,7 @@ export function CheckoutPage() {
         items: itemsPayload,
         paymentSource,
         couponCode: appliedCoupon ? appliedCoupon.code : null,
+        contactMethods,
       })
 
       // If checkout was from cart, clear main cart
@@ -233,6 +252,15 @@ export function CheckoutPage() {
           </div>
         )}
 
+        {/* CONTACT METHOD PRIORITIES */}
+        <div className="mt-8 rounded-2xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
+          <ContactMethodsEditor
+            initialMethods={contactMethods}
+            onSave={handleSaveContacts}
+            title="Order Contact Method Priorities (For 2FA & Order Updates)"
+          />
+        </div>
+
         {error && (
           <div className="mt-5 rounded-2xl bg-red-500/10 p-4 text-xs font-bold text-red-500">
             {error}
@@ -259,107 +287,110 @@ export function CheckoutPage() {
         </div>
       </div>
 
-      {/* SUMMARY SIDEBAR */}
-      <div className="space-y-6">
-        <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-          <h2 className="text-xl font-black">Order Summary</h2>
+      {/* RIGHT ORDER SUMMARY */}
+      <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-neutral-900 self-start">
+        <h2 className="text-xl font-black">Order Summary</h2>
 
-          <div className="mt-6 divide-y divide-black/5 dark:divide-white/5">
-            {checkoutItems.map((item) => (
-              <div key={item.cartItemId || item.id} className="flex justify-between py-3 text-xs font-bold">
-                <div>
-                  <p>{item.name}</p>
-                  {item.variantName && <p className="text-[10px] text-neutral-400">Option: {item.variantName}</p>}
-                  <p className="text-neutral-500 font-normal mt-0.5">Qty: {item.quantity}</p>
-                </div>
-                <p className="font-mono">{formatCurrency((item.priceMmk || item.price) * item.quantity)}</p>
+        <div className="mt-4 divide-y divide-black/5 dark:divide-white/5">
+          {checkoutItems.map((item) => (
+            <div key={item.cartItemId || item.id} className="flex justify-between py-3 text-xs font-bold">
+              <div>
+                <p>{item.name}</p>
+                {item.variantName && <p className="text-[10px] text-neutral-400">Option: {item.variantName}</p>}
+                <p className="text-neutral-500 font-normal mt-0.5">Qty: {item.quantity}</p>
               </div>
-            ))}
-          </div>
-
-          {/* COUPON CODE FORM */}
-          <div className="mt-6 border-t border-black/10 pt-4 dark:border-white/10">
-            {appliedCoupon ? (
-              <div className="flex items-center justify-between rounded-xl bg-emerald-500/10 p-3 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                <div className="flex items-center gap-1.5">
-                  <Tag className="h-4 w-4" />
-                  <span>
-                    Coupon "{appliedCoupon.code}" (
-                    {appliedCoupon.discountLabel ||
-                      (appliedCoupon.discountPercent
-                        ? `${appliedCoupon.discountPercent}% OFF`
-                        : 'Applied')}
-                    )
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={removeCoupon}
-                  className="cursor-pointer p-1 text-emerald-700 hover:text-red-500 dark:text-emerald-300"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleApplyCoupon} className="flex gap-2">
-                <input
-                  type="text"
-                  value={inputCode}
-                  onChange={(e) => setInputCode(e.target.value)}
-                  placeholder="Enter coupon code..."
-                  className="w-full rounded-xl border border-black/10 bg-neutral-50 px-3 py-2 text-xs font-bold outline-none transition focus:border-[#0b7e74] dark:border-white/10 dark:bg-neutral-950"
-                />
-                <button
-                  type="submit"
-                  disabled={couponLoading || !inputCode.trim()}
-                  className="cursor-pointer rounded-xl bg-neutral-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-[#0b7e74] disabled:opacity-50 dark:bg-neutral-800"
-                >
-                  {couponLoading ? '...' : 'Apply'}
-                </button>
-              </form>
-            )}
-
-            {couponError && (
-              <p className="mt-2 text-[11px] font-bold text-red-500">{couponError}</p>
-            )}
-          </div>
-
-          <div className="mt-6 space-y-2 border-t border-black/10 pt-4 font-bold dark:border-white/10">
-            <div className="flex justify-between text-xs text-neutral-600 dark:text-neutral-400">
-              <span>Subtotal</span>
-              <span className="font-mono">{formatCurrency(subtotal)}</span>
+              <p className="font-mono">{formatCurrency((item.priceMmk || item.price) * item.quantity)}</p>
             </div>
+          ))}
+        </div>
 
-            {couponDiscountMmk > 0 && (
-              <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
+        {/* COUPON CODE FORM */}
+        <div className="mt-6 border-t border-black/10 pt-4 dark:border-white/10">
+          {appliedCoupon ? (
+            <div className="flex items-center justify-between rounded-xl bg-emerald-500/10 p-3 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+              <div className="flex items-center gap-1.5">
+                <Tag className="h-4 w-4" />
                 <span>
-                  Discount (
-                  {appliedCoupon?.discountLabel ||
-                    (appliedCoupon?.discountPercent
+                  Coupon "{appliedCoupon.code}" (
+                  {appliedCoupon.discountLabel ||
+                    (appliedCoupon.discountPercent
                       ? `${appliedCoupon.discountPercent}% OFF`
-                      : 'Coupon')}
+                      : 'Applied')}
                   )
                 </span>
-                <span className="font-mono">-{formatCurrency(couponDiscountMmk)}</span>
               </div>
-            )}
-
-
-            {(taxPercent > 0 || serviceFeePercent > 0) && (
-              <p className="text-[10px] font-semibold text-neutral-500 pt-1">
-                *Tax Included.
-              </p>
-            )}
-
-            <div className="flex justify-between text-base font-black text-[#0b7e74] pt-2 border-t border-black/5 dark:border-white/5">
-              <span>Total Price</span>
-              <span className="font-mono">{formatCurrency(finalTotal)}</span>
+              <button
+                type="button"
+                onClick={removeCoupon}
+                className="cursor-pointer p-1 text-emerald-700 hover:text-red-500 dark:text-emerald-300"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
+          ) : (
+            <form onSubmit={handleApplyCoupon} className="flex gap-2">
+              <input
+                type="text"
+                value={inputCode}
+                onChange={(e) => setInputCode(e.target.value)}
+                placeholder="Enter coupon code..."
+                className="w-full rounded-xl border border-black/10 bg-neutral-50 px-3 py-2 text-xs font-bold outline-none transition focus:border-[#0b7e74] dark:border-white/10 dark:bg-neutral-950"
+              />
+              <button
+                type="submit"
+                disabled={couponLoading || !inputCode.trim()}
+                className="cursor-pointer rounded-xl bg-neutral-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-[#0b7e74] disabled:opacity-50 dark:bg-neutral-800"
+              >
+                {couponLoading ? '...' : 'Apply'}
+              </button>
+            </form>
+          )}
+
+          {couponError && (
+            <p className="mt-2 text-[11px] font-bold text-red-500">{couponError}</p>
+          )}
+        </div>
+
+        <div className="mt-6 space-y-2 border-t border-black/10 pt-4 font-bold dark:border-white/10">
+          <div className="flex justify-between text-xs text-neutral-600 dark:text-neutral-400">
+            <span>Subtotal</span>
+            <span className="font-mono">{formatCurrency(subtotal)}</span>
           </div>
 
+          {couponDiscountMmk > 0 && (
+            <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
+              <span>
+                Discount (
+                {appliedCoupon?.discountLabel ||
+                  (appliedCoupon?.discountPercent
+                    ? `${appliedCoupon.discountPercent}% OFF`
+                    : 'Coupon')}
+                )
+              </span>
+              <span className="font-mono">-{formatCurrency(couponDiscountMmk)}</span>
+            </div>
+          )}
 
+          {contactFeeMmk > 0 && (
+            <div className="flex justify-between text-xs text-amber-600 dark:text-amber-400">
+              <span>Contact Priority Fee (+{contactFeePercent}%)</span>
+              <span className="font-mono">+{formatCurrency(contactFeeMmk)}</span>
+            </div>
+          )}
+
+          {(taxPercent > 0 || serviceFeePercent > 0) && (
+            <p className="text-[10px] font-semibold text-neutral-500 pt-1">
+              *Tax Included.
+            </p>
+          )}
+
+          <div className="flex justify-between text-base font-black text-[#0b7e74] pt-2 border-t border-black/5 dark:border-white/5">
+            <span>Total Price</span>
+            <span className="font-mono">{formatCurrency(finalTotal)}</span>
+          </div>
         </div>
       </div>
     </section>
   )
 }
+
