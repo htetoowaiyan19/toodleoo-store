@@ -13,8 +13,9 @@ import {
 } from 'lucide-react'
 import { formatCurrency } from '../utils/format'
 import { useAuth } from '../utils/useAuth'
-import { subscribeUserCollection } from '../services/storeService'
+import { cancelPendingOrder, subscribeUserCollection } from '../services/storeService'
 import { getLocalPendingOrders, removeLocalPendingOrder } from '../utils/localOrders'
+import { DeleteConfirmModal } from '../components/common/DeleteConfirmModal'
 
 export function OrdersPage() {
   const { user } = useAuth()
@@ -22,6 +23,8 @@ export function OrdersPage() {
   const [orders, setOrders] = useState([])
   const [localDrafts, setLocalDrafts] = useState(() => getLocalPendingOrders())
   const [search, setSearch] = useState('')
+  const [deletingOrderTarget, setDeletingOrderTarget] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => subscribeUserCollection('orders', user.id, setOrders), [user.id])
 
@@ -42,12 +45,24 @@ export function OrdersPage() {
     )
   })
 
-  function handleCancelLocalOrder(draftId) {
-    if (confirm('Are you sure you want to cancel and delete this pending order draft?')) {
-      removeLocalPendingOrder(draftId)
-      setLocalDrafts(getLocalPendingOrders())
+  async function handleConfirmDelete() {
+    if (!deletingOrderTarget) return
+    setIsDeleting(true)
+    try {
+      if (deletingOrderTarget.isLocalDraft || deletingOrderTarget.id.startsWith('draft-')) {
+        removeLocalPendingOrder(deletingOrderTarget.id)
+        setLocalDrafts(getLocalPendingOrders())
+      } else {
+        await cancelPendingOrder(deletingOrderTarget.id)
+      }
+    } catch (err) {
+      console.error('Error cancelling order:', err)
+    } finally {
+      setIsDeleting(false)
+      setDeletingOrderTarget(null)
     }
   }
+
 
 
   return (
@@ -173,30 +188,26 @@ export function OrdersPage() {
 
                       {/* ACTION */}
                       <td className="p-3 text-right">
-                        {order.isLocalDraft || order.id.startsWith('draft-') ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="inline-flex items-center gap-1 text-xs font-bold text-[#0b7e74] hover:underline">
-                              Pay / View <ChevronRight className="h-3.5 w-3.5" />
-                            </span>
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-[#0b7e74] hover:underline">
+                            View <ChevronRight className="h-3.5 w-3.5" />
+                          </span>
+
+                          {(isPending || order.isLocalDraft || order.id.startsWith('draft-')) && (
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                handleCancelLocalOrder(order.id)
+                                setDeletingOrderTarget(order)
                               }}
                               className="inline-flex items-center gap-1 rounded-xl bg-rose-500/10 px-2.5 py-1 text-[11px] font-bold text-rose-500 hover:bg-rose-500 hover:text-white transition cursor-pointer"
-                              title="Cancel and delete pending draft order"
+                              title="Cancel and delete pending order"
                             >
                               <Trash2 className="h-3 w-3" /> Cancel
                             </button>
-                          </div>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-[#0b7e74] hover:underline">
-                            View Details <ChevronRight className="h-3.5 w-3.5" />
-                          </span>
-                        )}
+                          )}
+                        </div>
                       </td>
-
                     </tr>
                   )
                 })}
@@ -205,6 +216,19 @@ export function OrdersPage() {
           </div>
         )}
       </div>
+
+      {/* 5-SECOND COUNTDOWN DELETE CONFIRMATION MODAL */}
+      <DeleteConfirmModal
+        isOpen={Boolean(deletingOrderTarget)}
+        onClose={() => setDeletingOrderTarget(null)}
+        onConfirm={handleConfirmDelete}
+        isDeleting={isDeleting}
+        title="Cancel & Delete Order?"
+        message={`Are you sure you want to cancel order ${
+          deletingOrderTarget ? '#' + deletingOrderTarget.id.slice(0, 8) : ''
+        }? This pending order will be permanently deleted.`}
+      />
     </section>
   )
 }
+

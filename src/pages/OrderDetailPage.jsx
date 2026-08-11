@@ -30,6 +30,7 @@ import {
 import { supabase } from '../supabase'
 
 import { getLocalPendingOrderById, removeLocalPendingOrder } from '../utils/localOrders'
+import { DeleteConfirmModal } from '../components/common/DeleteConfirmModal'
 
 export function OrderDetailPage() {
   const { id } = useParams()
@@ -43,6 +44,8 @@ export function OrderDetailPage() {
   const [feedback, setFeedback] = useState('')
   const [receiptUrl, setReceiptUrl] = useState('')
   const [isZoomOpen, setIsZoomOpen] = useState(false)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(
     () => (user ? subscribeUserCollection('orders', user.id, setOrders) : undefined),
@@ -96,24 +99,28 @@ export function OrderDetailPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  async function handleCancelOrder() {
-    if (!confirm('Are you sure you want to cancel this pending order?')) return
-
-    if (order?.isLocalDraft || order?.id?.startsWith('draft-')) {
-      removeLocalPendingOrder(order.id)
-      setFeedback('Pending draft order has been cancelled and deleted.')
-      setTimeout(() => navigate('/orders'), 900)
-      return
-    }
-
+  async function handleConfirmDelete() {
+    if (!order) return
+    setIsDeleting(true)
     try {
+      if (order.isLocalDraft || order.id.startsWith('draft-')) {
+        removeLocalPendingOrder(order.id)
+        setFeedback('Pending draft order has been cancelled and deleted.')
+        setTimeout(() => navigate('/orders'), 900)
+        return
+      }
+
       await cancelPendingOrder(order.id)
       setFeedback('Pending order has been cancelled.')
       setTimeout(() => navigate('/orders'), 1200)
     } catch (err) {
       setFeedback(err.message || 'Failed to cancel order.')
+    } finally {
+      setIsDeleting(false)
+      setIsDeleteModalOpen(false)
     }
   }
+
 
 
   if (!order) {
@@ -440,6 +447,16 @@ export function OrderDetailPage() {
           </div>
         )
       })()}
+
+      {/* 5-SECOND COUNTDOWN DELETE CONFIRMATION MODAL */}
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        isDeleting={isDeleting}
+        title="Cancel & Delete Order?"
+        message={`Are you sure you want to cancel order #${order.id.slice(0, 8)}? Once deleted, this order will be permanently removed.`}
+      />
     </section>
   )
 }
