@@ -243,7 +243,7 @@ export function ProductProvider({ children }) {
 
     const refreshProducts = async () => {
       const settings = await loadExchangeRate()
-      await loadProducts(settings.rate, settings.taxPercent, settings.serviceFeePercent)
+      await fetchAndNormalizeProducts(settings.rate, settings.taxPercent, settings.serviceFeePercent)
     }
 
     const triggerMarketRateSync = async () => {
@@ -251,7 +251,7 @@ export function ProductProvider({ children }) {
       if (freshRate) {
         setExchangeRate(freshRate)
         setLastSyncedAt(new Date().toISOString())
-        await loadProducts(freshRate, taxPercent, serviceFeePercent)
+        await fetchAndNormalizeProducts(freshRate, taxPercent, serviceFeePercent)
       }
       return freshRate
     }
@@ -274,7 +274,8 @@ export function ProductProvider({ children }) {
       triggerMarketRateSync,
       updateFees,
     }
-  }, [loading, products, maxProductPrice, exchangeRate, taxPercent, serviceFeePercent, lastSyncedAt, convertUsdToMmk, formatCurrency, formatUsdToMmk, formatPriceRange, loadExchangeRate, loadProducts, updateFees])
+  }, [loading, products, maxProductPrice, exchangeRate, taxPercent, serviceFeePercent, lastSyncedAt, convertUsdToMmk, formatCurrency, formatUsdToMmk, formatPriceRange, loadExchangeRate, fetchAndNormalizeProducts, updateFees])
+
 
   return <ProductContext.Provider value={value}>{children}</ProductContext.Provider>
 }
