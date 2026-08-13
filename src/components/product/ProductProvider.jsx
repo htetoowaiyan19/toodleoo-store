@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../supabase'
 import { products as fallbackProducts } from '../../data/products'
-import { ProductContext } from '../../utils/productContext'
-import { getExchangeRateSettings, updateFeeSettings } from '../../services/storeService'
+import { getExchangeRateSettings, syncAutoExchangeRate, updateFeeSettings } from '../../services/storeService'
+
 import {
   formatCurrency as globalFormatCurrency,
   formatUsdToMmk as globalFormatUsdToMmk,
