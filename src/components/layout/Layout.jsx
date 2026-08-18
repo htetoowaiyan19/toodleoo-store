@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, NavLink, useLocation } from 'react-router'
 import { useCart } from '../../utils/useCart'
 import { useAuth } from '../../utils/useAuth'
+import { useTranslation } from '../../utils/useTranslation'
 import { GlobalSearch } from '../product/GlobalSearch'
 import { formatCurrency } from '../../utils/format'
 import logoImage from '../../assets/logo/logo_toodleoo-nobg.png'
@@ -15,19 +16,23 @@ import {
   ShieldCheck,
   Search,
   ShoppingCart,
+  Sparkles,
+  Crown,
+  Moon,
+  ArrowLeft,
+  X,
 } from 'lucide-react'
-
-const navItems = [
-  { to: '/', label: 'Home' },
-  { to: '/store', label: 'Store' },
-]
+import { getUserSubscription } from '../../utils/subscriptionPlans'
 
 export function Layout({ children, onCartOpen }) {
   const { count } = useCart()
   const { isAdmin, profile, user, refreshProfile } = useAuth()
+  const { t } = useTranslation()
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isRefreshingWallet, setIsRefreshingWallet] = useState(false)
   const location = useLocation()
+
+  const subData = useMemo(() => getUserSubscription(profile), [profile])
 
   async function handleRefreshWallet(e) {
     if (e) e.preventDefault()
@@ -37,25 +42,11 @@ export function Layout({ children, onCartOpen }) {
   }
 
   const visibleNavItems = [
-    ...navItems,
-    ...(user
-      ? [
-        { to: '/wallet', label: 'Wallet' },
-        { to: '/orders', label: 'Orders' },
-        { to: '/account', label: 'Account' },
-      ]
-      : []),
-    ...(isAdmin ? [{ to: '/admin', label: 'Admin' }] : []),
+    { to: '/', label: t('nav.home') },
+    { to: '/store', label: t('nav.store') },
+    { to: '/custom-order', label: t('customOrder.title').split(' ')[0] || 'Custom' },
+    ...(isAdmin ? [{ to: '/admin', label: t('nav.admin') }] : []),
   ]
-
-  const activeIndex = Math.max(
-    0,
-    visibleNavItems.findIndex((item) =>
-      item.to === '/'
-        ? location.pathname === '/'
-        : location.pathname.startsWith(item.to),
-    ),
-  )
 
   // Listen for Cmd+K / Ctrl+K keyboard shortcut to open search
   useEffect(() => {
@@ -70,42 +61,29 @@ export function Layout({ children, onCartOpen }) {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#f7fbfa] text-neutral-950 transition-colors dark:bg-neutral-950 dark:text-white pb-20 md:pb-0">
-      {/* STICKY DESKTOP & MOBILE HEADER */}
-      <header className="sticky top-0 z-30 px-2 py-2 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-1.5 sm:gap-2.5 rounded-full border border-black/10 bg-white/85 px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-xl shadow-black/5 backdrop-blur-xl transition-colors dark:border-white/10 dark:bg-neutral-900/85 dark:shadow-black/30">
+    <div className="min-h-screen bg-[#f7fbfa] pb-20 md:pb-0 text-neutral-950 transition-colors dark:bg-neutral-950 dark:text-white">
+      {/* STANDARD HEADER */}
+      <header className="sticky top-0 z-30 px-2.5 py-2 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-1.5 sm:gap-2.5 rounded-full border border-black/10 bg-white/85 px-3 py-1.5 sm:px-5 sm:py-2 shadow-lg shadow-black/5 backdrop-blur-xl transition-colors dark:border-white/10 dark:bg-neutral-900/85 dark:shadow-black/30">
           {/* BRAND LOGO */}
           <Link to="/" className="flex items-center pl-0.5 shrink-0">
             <img
               src={logoImage}
               alt="Toodleoo Store"
-              className="h-7 sm:h-9 w-auto object-contain transition hover:opacity-90"
+              className="h-6 sm:h-8 md:h-9 w-auto object-contain transition hover:opacity-90"
             />
           </Link>
 
-          {/* MAIN PILL NAVIGATION BAR (DESKTOP ONLY) */}
-          <nav
-            className="relative hidden rounded-full border border-black/10 bg-neutral-100 p-1 text-sm font-medium dark:border-white/10 dark:bg-white/10 md:grid"
-            style={{
-              gridTemplateColumns: `repeat(${visibleNavItems.length}, minmax(0, 1fr))`,
-              width: `${visibleNavItems.length * 92}px`,
-            }}
-          >
-            <span
-              className="absolute left-1 top-1 h-[calc(100%-8px)] rounded-full bg-neutral-950 shadow-md transition-all duration-300 ease-out dark:bg-white"
-              style={{
-                transform: `translateX(${activeIndex * 100}%)`,
-                width: `calc((100% - 8px) / ${visibleNavItems.length})`,
-              }}
-            />
+          {/* MAIN NAVIGATION BAR (DESKTOP ONLY) */}
+          <nav className="hidden items-center gap-1 md:flex">
             {visibleNavItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
-                  `relative z-10 rounded-full px-4 py-2 text-center transition-colors duration-300 ${isActive
-                    ? 'text-white dark:text-neutral-950'
-                    : 'text-neutral-600 hover:text-neutral-950 dark:text-white/60 dark:hover:text-white'
+                  `flex items-center justify-center rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${isActive
+                    ? 'text-[#0b7e74] bg-[#0b7e74]/10 dark:text-[#67dccf] dark:bg-[#0b7e74]/20'
+                    : 'text-neutral-600 hover:text-neutral-950 hover:bg-black/5 dark:text-neutral-300 dark:hover:text-white dark:hover:bg-white/10'
                   }`
                 }
               >
@@ -115,25 +93,25 @@ export function Layout({ children, onCartOpen }) {
           </nav>
 
           {/* HEADER ACTION BUTTONS */}
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             {/* SEARCH ICON BUTTON */}
             <button
               type="button"
               onClick={() => setIsSearchOpen(true)}
-              aria-label="Search Store"
-              title="Search store (Ctrl+K)"
-              className="flex h-8 w-8 sm:h-9 sm:w-9 cursor-pointer items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition hover:bg-neutral-100 active:scale-[0.98] dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/20 shrink-0"
+              aria-label={t('common.search')}
+              title={`${t('common.search')} (${t('nav.searchShortcut')})`}
+              className="flex h-8 w-8 sm:h-9 sm:w-9 cursor-pointer items-center justify-center rounded-full text-neutral-600 transition hover:text-black hover:bg-black/5 active:scale-[0.95] dark:text-neutral-300 dark:hover:text-white dark:hover:bg-white/10 shrink-0"
             >
-              <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-neutral-600 dark:text-neutral-300" />
+              <Search className="h-4 w-4" />
             </button>
 
             {/* WALLET BALANCE & REFRESH ICON */}
             {user && (
-              <div className="flex h-8 sm:h-9 items-center gap-1 sm:gap-1.5 rounded-full border border-black/10 bg-white px-2 sm:px-3 text-[11px] sm:text-xs font-bold shadow-sm dark:border-white/10 dark:bg-white/10 shrink-0">
+              <div className="flex h-8 sm:h-9 items-center gap-1 rounded-full px-2 sm:px-2.5 text-[11px] sm:text-xs font-bold text-neutral-900 hover:bg-black/5 dark:text-white dark:hover:bg-white/10 transition shrink-0">
                 <Link
                   to="/wallet"
-                  className="flex items-center gap-1 text-neutral-900 dark:text-white hover:text-[#0b7e74] transition"
-                  title="View Personal Wallet"
+                  className="flex items-center gap-1 hover:text-[#0b7e74] transition"
+                  title={t('account.walletTile')}
                 >
                   <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#0b7e74]" />
                   <span className="font-mono font-black">
@@ -144,7 +122,7 @@ export function Layout({ children, onCartOpen }) {
                   type="button"
                   onClick={handleRefreshWallet}
                   disabled={isRefreshingWallet}
-                  title="Refresh Wallet Balance"
+                  title={t('common.refresh')}
                   className="hidden sm:inline-block p-0.5 text-neutral-400 hover:text-[#0b7e74] transition cursor-pointer rounded-full"
                 >
                   <RotateCw className={`h-3 w-3 ${isRefreshingWallet ? 'animate-spin text-[#0b7e74]' : ''}`} />
@@ -152,116 +130,117 @@ export function Layout({ children, onCartOpen }) {
               </div>
             )}
 
-            {/* CART BUTTON */}
+            {/* TIGHTENED CART BUTTON */}
             <button
               type="button"
               onClick={onCartOpen}
-              aria-label="Shopping Cart"
-              title="View Shopping Cart"
-              className="relative flex h-8 sm:h-9 items-center gap-1 sm:gap-1.5 cursor-pointer rounded-full border border-black/10 bg-white px-2 sm:px-3 text-[11px] sm:text-xs font-semibold shadow-sm transition hover:bg-neutral-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/10 shrink-0"
+              aria-label={t('cart.title')}
+              title={t('nav.openCart')}
+              className="relative flex h-8 w-8 sm:h-9 sm:w-9 cursor-pointer items-center justify-center rounded-full text-neutral-600 transition hover:text-black hover:bg-black/5 active:scale-[0.95] dark:text-neutral-300 dark:hover:text-white dark:hover:bg-white/10 shrink-0"
             >
-              <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#0b7e74]" />
-              <span className="rounded-full bg-[#0b7e74] px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black text-white">
-                {count}
-              </span>
+              <ShoppingCart className="h-4 w-4 text-[#0b7e74]" />
+              {count > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#0b7e74] px-1 text-[9px] font-black text-white shadow-sm">
+                  {count}
+                </span>
+              )}
             </button>
 
-            {/* LOGIN / PROFILE LINK (ICON ONLY) */}
+            {/* LOGIN / PROFILE LINK */}
             <Link
               to={user ? '/account' : '/login'}
-              title={user ? profile?.displayName || 'Account' : 'Login'}
-              aria-label={user ? 'Account' : 'Login'}
-              className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full border border-black/10 bg-white shadow-sm transition hover:bg-neutral-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/10 shrink-0"
+              title={user ? `${profile?.displayName || t('common.account')}` : t('common.login')}
+              aria-label={user ? t('common.account') : t('common.login')}
+              className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full text-neutral-600 transition hover:text-black hover:bg-black/5 active:scale-[0.95] dark:text-neutral-300 dark:hover:text-white dark:hover:bg-white/10 shrink-0"
             >
-              <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#0b7e74]" />
+              <User className="h-4 w-4 text-[#0b7e74]" />
             </Link>
           </div>
         </div>
       </header>
 
-
       {/* PAGE CONTENT CONTAINER */}
       <main>{children}</main>
 
-      {/* MOBILE BOTTOM NAVIGATION BAR (FIXED BOTTOM DOCK FOR MOBILE DEVICES) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-black/10 bg-white/90 px-2 py-2 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-neutral-900/95 md:hidden">
+      {/* MOBILE BOTTOM NAVIGATION BAR */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-black/10 bg-white/95 px-2 py-2 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-neutral-900/95 md:hidden">
         <NavLink
           to="/"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
+            `flex flex-col items-center gap-1 rounded-lg px-3 py-1 text-[10px] font-bold transition ${isActive
               ? 'text-[#0b7e74] dark:text-[#67dccf]'
               : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
             }`
           }
         >
           <Home className="h-5 w-5" />
-          <span>Home</span>
+          <span>{t('nav.home')}</span>
         </NavLink>
 
         <NavLink
           to="/store"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
+            `flex flex-col items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold transition ${isActive
               ? 'text-[#0b7e74] dark:text-[#67dccf]'
               : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
             }`
           }
         >
           <ShoppingBag className="h-5 w-5" />
-          <span>Store</span>
+          <span>{t('nav.store')}</span>
+        </NavLink>
+
+        <NavLink
+          to="/custom-order"
+          className={({ isActive }) =>
+            `flex flex-col items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold transition ${isActive
+              ? 'text-[#0b7e74] dark:text-[#67dccf]'
+              : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
+            }`
+          }
+        >
+          <Sparkles className="h-5 w-5" />
+          <span>{t('customOrder.title').split(' ')[0] || 'Custom'}</span>
         </NavLink>
 
         <NavLink
           to="/wallet"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
+            `flex flex-col items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold transition ${isActive
               ? 'text-[#0b7e74] dark:text-[#67dccf]'
               : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
             }`
           }
         >
           <Wallet className="h-5 w-5" />
-          <span>Wallet</span>
-        </NavLink>
-
-        <NavLink
-          to="/orders"
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
-              ? 'text-[#0b7e74] dark:text-[#67dccf]'
-              : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
-            }`
-          }
-        >
-          <Package className="h-5 w-5" />
-          <span>Orders</span>
+          <span>{t('nav.wallet')}</span>
         </NavLink>
 
         <NavLink
           to={user ? '/account' : '/login'}
           className={({ isActive }) =>
-            `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
+            `flex flex-col items-center gap-1 rounded-lg px-3 py-1 text-[10px] font-bold transition ${isActive
               ? 'text-[#0b7e74] dark:text-[#67dccf]'
               : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
             }`
           }
         >
           <User className="h-5 w-5" />
-          <span>{user ? 'Account' : 'Login'}</span>
+          <span>{user ? t('nav.account') : t('nav.login')}</span>
         </NavLink>
 
         {isAdmin && (
           <NavLink
             to="/admin"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 rounded-2xl px-3 py-1.5 text-[10px] font-bold transition ${isActive
+              `flex flex-col items-center gap-1 rounded-lg px-3 py-1 text-[10px] font-bold transition ${isActive
                 ? 'text-[#0b7e74] dark:text-[#67dccf]'
                 : 'text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
               }`
             }
           >
             <ShieldCheck className="h-5 w-5" />
-            <span>Admin</span>
+            <span>{t('nav.admin')}</span>
           </NavLink>
         )}
       </nav>
@@ -269,20 +248,20 @@ export function Layout({ children, onCartOpen }) {
       {/* GLOBAL SEARCH OVERLAY MODAL */}
       {isSearchOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4 pt-16 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-3xl border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-neutral-900">
+          <div className="w-full max-w-2xl rounded-xl border border-black/10 bg-white p-5 sm:p-6 shadow-2xl dark:border-white/10 dark:bg-neutral-900">
             <div className="flex items-center justify-between pb-3">
-              <h3 className="text-base font-black">Search Toodleoo Store</h3>
+              <h3 className="text-base font-black">{t('home.heroTitle')}</h3>
               <button
                 type="button"
                 onClick={() => setIsSearchOpen(false)}
-                className="cursor-pointer rounded-full p-1 text-xs font-bold text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-white"
+                className="cursor-pointer rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-white"
               >
-                ✕
+                <X className="h-4 w-4" />
               </button>
             </div>
             <GlobalSearch
               onSelect={() => setIsSearchOpen(false)}
-              placeholder="Search products, games, digital services..."
+              placeholder={t('store.searchPlaceholder')}
             />
           </div>
         </div>
@@ -290,3 +269,5 @@ export function Layout({ children, onCartOpen }) {
     </div>
   )
 }
+
+

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Route, Routes } from 'react-router'
+import { Route, Routes, Navigate } from 'react-router'
 import { AuthProvider } from './components/auth/AuthProvider'
 import { ThemeProvider } from './components/theme/ThemeProvider'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
@@ -24,6 +24,9 @@ import { PaymentPage } from './pages/PaymentPage'
 import { ProductPage } from './pages/ProductPage'
 import { StorePage } from './pages/StorePage'
 import { WalletPage } from './pages/WalletPage'
+import { CustomOrderPage } from './pages/CustomOrderPage'
+import { SubscriptionsPage } from './pages/SubscriptionsPage'
+import { SettingsPage } from './pages/SettingsPage'
 
 function AppRoutes() {
   const [isCartOpen, setIsCartOpen] = useState(false)
@@ -45,10 +48,28 @@ function AppRoutes() {
           <Route path="/product/:slug" element={<ProductPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route
+            path="/custom-order"
+            element={
+              <ProtectedRoute>
+                <CustomOrderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/subscriptions" element={<SubscriptionsPage />} />
+          <Route path="/membership" element={<SubscriptionsPage />} />
+          <Route
             path="/account"
             element={
               <ProtectedRoute>
                 <AccountPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
               </ProtectedRoute>
             }
           />
@@ -62,11 +83,7 @@ function AppRoutes() {
           />
           <Route
             path="/orders"
-            element={
-              <ProtectedRoute>
-                <OrdersPage />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/account?tab=orders" replace />}
           />
           <Route
             path="/orders/:id"
@@ -118,6 +135,14 @@ function AppRoutes() {
             }
           />
           <Route
+            path="/admin/custom-orders"
+            element={
+              <ProtectedRoute adminOnly>
+                <AdminPage defaultTab="custom-orders" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/discounts"
             element={
               <ProtectedRoute adminOnly>
@@ -125,7 +150,6 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
-
 
           <Route
             path="/admin/payments"
@@ -150,21 +174,24 @@ function AppRoutes() {
   )
 }
 
+
 import { CouponProvider } from './components/coupon/CouponProvider'
+import { LanguageProvider } from './components/language/LanguageProvider'
 
 function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <ProductProvider>
-          <CouponProvider>
-            <AppRoutes />
-          </CouponProvider>
-        </ProductProvider>
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <ProductProvider>
+            <CouponProvider>
+              <AppRoutes />
+            </CouponProvider>
+          </ProductProvider>
+        </AuthProvider>
+      </LanguageProvider>
     </ThemeProvider>
   )
 }
-
 
 export default App

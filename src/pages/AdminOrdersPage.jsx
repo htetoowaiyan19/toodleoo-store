@@ -15,6 +15,7 @@ import {
   Download,
   Eye,
   FileText,
+  Key,
   Maximize2,
   Package,
   Search,
@@ -27,13 +28,20 @@ import {
   RotateCcw,
   Calendar,
   Lock,
+  Phone,
+  ShieldCheck,
+  Shield,
+  Tag,
+  ExternalLink,
 } from 'lucide-react'
 import { formatCurrency } from '../utils/format'
 import { useAuth } from '../utils/useAuth'
+import { useTranslation } from '../utils/useTranslation'
 import { DeleteConfirmModal } from '../components/common/DeleteConfirmModal'
 
 export function AdminOrdersPage() {
   const { user } = useAuth()
+  const { t } = useTranslation()
   const [orders, setOrders] = useState([])
   const [payments, setPayments] = useState([])
   const [messages, setMessages] = useState({})
@@ -366,37 +374,37 @@ export function AdminOrdersPage() {
       {/* HEADER TITLE */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="font-bold text-[#0b7e74]">Admin Operations Hub</p>
-          <h1 className="mt-1 text-3xl font-black">Order & Payment Processing</h1>
+          <p className="font-bold text-[#0b7e74]">{t('admin.subtitle')}</p>
+          <h1 className="mt-1 text-3xl font-black">{t('admin.orders.title')}</h1>
           <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            Review manual receipts, process wallet orders, and deliver digital license keys.
+            {t('admin.orders.subtitle')}
           </p>
         </div>
 
         {/* TAB FILTER BUTTONS */}
-        <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-black/10 bg-neutral-100 p-1.5 dark:border-white/10 dark:bg-neutral-800">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-nowrap rounded-lg border border-black/10 bg-neutral-100 p-1 dark:border-white/10 dark:bg-neutral-800">
           <button
             type="button"
             onClick={() => setActiveTab('all')}
-            className={`cursor-pointer rounded-xl px-3 py-2 text-xs font-bold transition ${activeTab === 'all'
+            className={`cursor-pointer shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-bold transition ${activeTab === 'all'
               ? 'bg-white text-black shadow-sm dark:bg-neutral-900 dark:text-white'
               : 'text-neutral-600 hover:text-black dark:text-neutral-400 dark:hover:text-white'
               }`}
           >
-            All ({counts.all})
+            {t('admin.orders.allTab', { count: counts.all })}
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('review')}
-            className={`cursor-pointer flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition ${activeTab === 'review'
+            className={`cursor-pointer shrink-0 whitespace-nowrap flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition ${activeTab === 'review'
               ? 'bg-amber-500 text-white shadow-sm'
               : 'text-neutral-600 hover:text-black dark:text-neutral-400 dark:hover:text-white'
               }`}
           >
-            <span>Awaiting Review</span>
+            <span>{t('admin.orders.reviewTab')}</span>
             {counts.review > 0 && (
-              <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-black text-amber-600">
+              <span className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-black text-amber-600">
                 {counts.review}
               </span>
             )}
@@ -405,14 +413,14 @@ export function AdminOrdersPage() {
           <button
             type="button"
             onClick={() => setActiveTab('ready')}
-            className={`cursor-pointer flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition ${activeTab === 'ready'
+            className={`cursor-pointer shrink-0 whitespace-nowrap flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition ${activeTab === 'ready'
               ? 'bg-[#0b7e74] text-white shadow-sm'
               : 'text-neutral-600 hover:text-black dark:text-neutral-400 dark:hover:text-white'
               }`}
           >
-            <span>Paid & Ready to Send</span>
+            <span>{t('admin.orders.readyTab')}</span>
             {counts.ready > 0 && (
-              <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-black text-[#0b7e74]">
+              <span className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-black text-[#0b7e74]">
                 {counts.ready}
               </span>
             )}
@@ -421,25 +429,25 @@ export function AdminOrdersPage() {
           <button
             type="button"
             onClick={() => setActiveTab('delivered')}
-            className={`cursor-pointer rounded-xl px-3 py-2 text-xs font-bold transition ${activeTab === 'delivered'
+            className={`cursor-pointer shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-bold transition ${activeTab === 'delivered'
               ? 'bg-emerald-600 text-white shadow-sm'
               : 'text-neutral-600 hover:text-black dark:text-neutral-400 dark:hover:text-white'
               }`}
           >
-            Delivered ({counts.delivered})
+            {t('admin.orders.deliveredTab', { count: counts.delivered })}
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('wallet')}
-            className={`cursor-pointer flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition ${activeTab === 'wallet'
+            className={`cursor-pointer shrink-0 whitespace-nowrap flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition ${activeTab === 'wallet'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'text-neutral-600 hover:text-black dark:text-neutral-400 dark:hover:text-white'
               }`}
           >
-            <span>Wallet Top-Ups</span>
+            <span>{t('admin.orders.walletTab')}</span>
             {counts.wallet > 0 && (
-              <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-black text-blue-600">
+              <span className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-black text-blue-600">
                 {counts.wallet}
               </span>
             )}
@@ -448,46 +456,46 @@ export function AdminOrdersPage() {
       </div>
 
       {feedback && (
-        <div className="flex items-center justify-between rounded-2xl bg-emerald-500/10 p-4 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+        <div className="flex items-center justify-between rounded-lg bg-emerald-500/10 p-3 text-xs font-bold text-emerald-600 dark:text-emerald-400">
           <span>{feedback}</span>
-          <button type="button" onClick={() => setFeedback('')} className="cursor-pointer">
-            ✕
+          <button type="button" onClick={() => setFeedback('')} className="cursor-pointer p-1">
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
 
       {/* SEARCH BAR */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3.5 top-3 h-4 w-4 text-neutral-400" />
+        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-neutral-400" />
         <input
           type="text"
-          placeholder="Search order ID, email, or product name..."
+          placeholder={t('admin.orders.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-2xl border border-black/10 bg-white pl-10 pr-4 py-2.5 text-xs font-medium outline-none transition focus:border-[#0b7e74] dark:border-white/10 dark:bg-neutral-900"
+          className="w-full rounded-lg border border-black/10 bg-white pl-9 pr-4 py-2 text-xs font-semibold outline-none transition focus:border-[#0b7e74] dark:border-white/10 dark:bg-neutral-900"
         />
       </div>
 
       {/* ORDERS & PAYMENTS TABLE */}
-      <div className="rounded-3xl border border-black/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
+      <div className="rounded-xl border border-black/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
         {filteredItems.length === 0 ? (
-          <div className="p-12 text-center text-neutral-500">
+          <div className="p-10 text-center text-neutral-500">
             <Package className="mx-auto h-8 w-8 text-neutral-400" />
-            <p className="mt-2 text-sm font-bold">No orders or payments found</p>
+            <p className="mt-2 text-sm font-bold">{t('admin.orders.noOrders')}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="border-b border-black/10 bg-neutral-50 font-bold uppercase tracking-wider text-neutral-500 dark:border-white/10 dark:bg-neutral-800/50">
                 <tr>
-                  <th className="p-3">Order / Reference</th>
-                  <th className="p-3">Customer Email</th>
-                  <th className="p-3">Items Purchased</th>
-                  <th className="p-3">Total Amount</th>
-                  <th className="p-3">Payment Source</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3">Order Date</th>
-                  <th className="p-3 text-right">Actions</th>
+                  <th className="p-2.5">{t('admin.orders.orderRef')}</th>
+                  <th className="p-2.5">{t('admin.orders.customerEmail')}</th>
+                  <th className="p-2.5">{t('admin.orders.itemsPurchased')}</th>
+                  <th className="p-2.5">{t('admin.orders.totalAmount')}</th>
+                  <th className="p-2.5">{t('admin.orders.paymentSource')}</th>
+                  <th className="p-2.5">{t('admin.orders.status')}</th>
+                  <th className="p-2.5">{t('admin.orders.orderDate')}</th>
+                  <th className="p-2.5 text-right">{t('admin.orders.actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5 dark:divide-white/5">
@@ -497,9 +505,9 @@ export function AdminOrdersPage() {
 
                   return (
                     <tr key={item.id} className="transition hover:bg-black/5 dark:hover:bg-white/5">
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-black text-[#0b7e74] bg-[#0b7e74]/10 px-2 py-1 rounded-xl">
+                      <td className="p-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-black text-[#0b7e74] bg-[#0b7e74]/10 px-2 py-0.5 rounded-md text-[11px]">
                             #{item.id.slice(0, 8)}
                           </span>
                           {receiptUrl && (
@@ -507,17 +515,17 @@ export function AdminOrdersPage() {
                               type="button"
                               onClick={() => openZoomModal(receiptUrl)}
                               className="cursor-pointer p-1 text-neutral-400 hover:text-black dark:hover:text-white"
-                              title="View Payment Receipt"
+                              title={t('admin.orders.viewReceipt')}
                             >
-                              <FileText className="h-4 w-4 text-amber-500" />
+                              <FileText className="h-3.5 w-3.5 text-amber-500" />
                             </button>
                           )}
                         </div>
                       </td>
 
-                      <td className="p-3 font-bold">{item.userEmail || 'Customer'}</td>
+                      <td className="p-2.5 font-bold">{item.userEmail || 'Customer'}</td>
 
-                      <td className="p-3">
+                      <td className="p-2.5">
                         {item.items && item.items.length > 0 ? (
                           <div className="space-y-0.5">
                             {item.items.map((it, idx) => (
@@ -531,61 +539,61 @@ export function AdminOrdersPage() {
                         )}
                       </td>
 
-                      <td className="p-3 font-mono font-black text-sm text-emerald-600 dark:text-emerald-400">
+                      <td className="p-2.5 font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400">
                         {formatCurrency(item.totalMmk)}
                       </td>
 
-                      <td className="p-3">
+                      <td className="p-2.5">
                         {item.paymentSource === 'wallet' ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-[10px] font-bold text-blue-600 dark:text-blue-400">
-                            <CreditCard className="h-3 w-3" /> Wallet Pay
+                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                            <CreditCard className="h-3 w-3" /> {t('admin.orders.walletPay')}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                            <FileText className="h-3 w-3" /> Manual Transfer
+                          <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                            <FileText className="h-3 w-3" /> {t('admin.orders.manualTransfer')}
                           </span>
                         )}
                       </td>
 
-                      <td className="p-3">
+                      <td className="p-2.5">
                         {item.status === 'delivered' || item.status === 'approved' ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                            <CheckCircle2 className="h-3 w-3" /> {item.isPayment ? 'Delivered (Deposited)' : 'Delivered'}
+                          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" /> {item.isPayment ? t('admin.orders.deliveredDeposited') : t('admin.orders.delivered')}
                           </span>
                         ) : item.status === 'paid' ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-[10px] font-bold text-blue-600 dark:text-blue-400">
-                            <Clock className="h-3 w-3" /> Paid & Processing
+                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                            <Clock className="h-3 w-3" /> {t('admin.orders.paidProcessing')}
                           </span>
                         ) : item.status === 'rejected' ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-1 text-[10px] font-bold text-red-500">
-                            <XCircle className="h-3 w-3" /> Rejected
+                          <span className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-500">
+                            <XCircle className="h-3 w-3" /> {t('admin.orders.rejected')}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                            <Clock className="h-3 w-3" /> Reviewing
+                          <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                            <Clock className="h-3 w-3" /> {t('admin.orders.reviewing')}
                           </span>
                         )}
                       </td>
 
-                      <td className="p-3 text-neutral-500 font-medium">{orderDate}</td>
+                      <td className="p-2.5 text-neutral-500 font-medium">{orderDate}</td>
 
-                      <td className="p-3 text-right">
+                      <td className="p-2.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => setInspectTarget(item)}
-                            className="cursor-pointer inline-flex items-center gap-1 rounded-xl bg-[#0b7e74]/10 px-3 py-1.5 text-xs font-bold text-[#0b7e74] hover:bg-[#0b7e74] hover:text-white transition"
+                            className="cursor-pointer inline-flex items-center gap-1 rounded-lg bg-[#0b7e74]/10 px-2.5 py-1 text-xs font-bold text-[#0b7e74] hover:bg-[#0b7e74] hover:text-white transition"
                           >
-                            <Eye className="h-3.5 w-3.5" /> Inspect
+                            <Eye className="h-3.5 w-3.5" /> {t('admin.orders.inspect')}
                           </button>
 
                           <button
                             type="button"
                             onClick={() => setDeleteTarget({ id: item.id, isPaymentDelete: item.isPayment })}
-                            className="cursor-pointer p-1.5 text-red-500 hover:bg-red-500/10 rounded-xl transition"
-                            title="Delete Order Record"
+                            className="cursor-pointer p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition"
+                            title={t('admin.orders.deleteRecord')}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </td>
@@ -601,35 +609,35 @@ export function AdminOrdersPage() {
       {/* INSPECT DETAIL MODAL */}
       {inspectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-neutral-900">
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-black/10 bg-white p-5 sm:p-6 shadow-2xl dark:border-white/10 dark:bg-neutral-900">
             {/* MODAL HEADER */}
-            <div className="flex items-center justify-between border-b border-black/10 pb-4 dark:border-white/10">
+            <div className="flex items-center justify-between border-b border-black/10 pb-3.5 dark:border-white/10">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#0b7e74]">
-                    {inspectTarget.isPayment ? 'Wallet Topup Inspection' : 'Order Inspector'}
+                    {inspectTarget.isPayment ? t('admin.orders.inspectWallet') : t('admin.orders.inspectOrder')}
                   </span>
                 </div>
-                <h2 className="mt-0.5 text-xl font-black">
+                <h2 className="mt-0.5 text-lg sm:text-xl font-black">
                   #{inspectTarget.id.slice(0, 8)} - {inspectTarget.userEmail}
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setInspectTarget(null)}
-                className="cursor-pointer rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                className="cursor-pointer rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="mt-6 space-y-6">
+            <div className="mt-5 space-y-5">
               {/* DATE OF PURCHASE & STATUS BADGE */}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-neutral-50 p-4 dark:bg-neutral-800/40">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-50 p-3.5 dark:bg-neutral-800/40">
                 <div className="flex items-center gap-2 text-xs font-bold text-neutral-600 dark:text-neutral-300">
                   <Calendar className="h-4 w-4 text-[#0b7e74]" />
                   <span>
-                    Date of {inspectTarget.isPayment ? 'Deposit' : 'Purchase'}:{' '}
+                    {inspectTarget.isPayment ? t('admin.orders.dateOfDeposit') : t('admin.orders.dateOfPurchase')}:{' '}
                     <strong className="text-black dark:text-white">
                       {inspectTarget.createdAt ? new Date(inspectTarget.createdAt).toLocaleString() : 'N/A'}
                     </strong>
@@ -638,20 +646,20 @@ export function AdminOrdersPage() {
 
                 <div>
                   {inspectTarget.status === 'delivered' || (inspectTarget.isPayment && inspectTarget.status === 'approved') ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-black text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      <CheckCircle2 className="h-4 w-4" /> {inspectTarget.isPayment ? 'DELIVERED - WALLET DEPOSITED' : 'DELIVERED - COMPLETED'}
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> {inspectTarget.isPayment ? t('admin.orders.deliveredDeposited') : t('admin.orders.delivered')}
                     </span>
                   ) : inspectTarget.status === 'rejected' ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1 text-xs font-black text-red-500 border border-red-500/20">
-                      <XCircle className="h-4 w-4" /> REJECTED
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-red-500/10 px-2.5 py-0.5 text-xs font-bold text-red-500 border border-red-500/20">
+                      <XCircle className="h-3.5 w-3.5" /> {t('admin.orders.rejected')}
                     </span>
                   ) : inspectTarget.status === 'paid' ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 px-3 py-1 text-xs font-black text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                      <Clock className="h-4 w-4" /> PAID & PROCESSING
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-500/10 px-2.5 py-0.5 text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                      <Clock className="h-3.5 w-3.5" /> {t('admin.orders.paidProcessing')}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-black text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                      <Clock className="h-4 w-4" /> AWAITING REVIEW
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      <Clock className="h-3.5 w-3.5" /> {t('admin.orders.awaitingReview')}
                     </span>
                   )}
                 </div>
@@ -666,10 +674,10 @@ export function AdminOrdersPage() {
                 if (!inputs || Object.keys(inputs).length === 0) return null
 
                 return (
-                  <div className="rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4 space-y-3">
+                  <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3.5 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
-                        <FileText className="h-4 w-4" /> Customer Processing Information
+                        <FileText className="h-3.5 w-3.5" /> {t('admin.orders.customerInfo')}
                       </h4>
                       <button
                         type="button"
@@ -678,15 +686,15 @@ export function AdminOrdersPage() {
                             .map(([k, v]) => `${k}: ${v}`)
                             .join('\n')
                           navigator.clipboard.writeText(text)
-                          setFeedback('Customer processing info copied!')
+                          setFeedback(t('admin.orders.infoCopied'))
                         }}
                         className="cursor-pointer text-[10px] font-bold text-blue-600 hover:underline"
                       >
-                        Copy Info
+                        {t('admin.orders.copyInfo')}
                       </button>
                     </div>
 
-                    <div className="rounded-xl border border-black/10 bg-white p-3 space-y-1.5 dark:border-white/10 dark:bg-neutral-900">
+                    <div className="rounded-lg border border-black/10 bg-white p-2.5 space-y-1 dark:border-white/10 dark:bg-neutral-900">
                       {Object.entries(inputs).map(([label, val]) => (
                         <div key={label} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs font-mono">
                           <span className="font-bold text-neutral-500">{label}:</span>
@@ -699,7 +707,6 @@ export function AdminOrdersPage() {
               })()}
 
               {/* CUSTOMER CONTACT PRIORITIES FOR 2FA & SUPPORT */}
-
               {(() => {
                 const contactMethods = inspectTarget.contactMethods || inspectTarget.contact_methods
                 if (!Array.isArray(contactMethods) || contactMethods.length === 0) return null
@@ -707,25 +714,25 @@ export function AdminOrdersPage() {
                 const feePct = Number(inspectTarget.contactFeePercent || inspectTarget.contact_fee_percent || 0)
 
                 return (
-                  <div className="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
+                  <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 p-3.5 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
-                        <Phone className="h-4 w-4" /> Contact Priorities (2FA & Support)
+                        <Phone className="h-3.5 w-3.5" /> {t('admin.orders.contactPriorities')}
                       </h4>
                       {feePct > 0 && (
-                        <span className="rounded-full bg-purple-500/10 px-2.5 py-0.5 text-[10px] font-bold text-purple-600 border border-purple-500/20 dark:text-purple-300">
-                          +{feePct}% Fee Included
+                        <span className="rounded-md bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-600 border border-purple-500/20 dark:text-purple-300">
+                          {t('admin.orders.feeIncluded', { fee: feePct })}
                         </span>
                       )}
                     </div>
 
-                    <div className="rounded-xl border border-black/10 bg-white p-3 space-y-2 dark:border-white/10 dark:bg-neutral-900">
+                    <div className="rounded-lg border border-black/10 bg-white p-2.5 space-y-1.5 dark:border-white/10 dark:bg-neutral-900">
                       {contactMethods.map((cm, idx) => (
-                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs font-mono border-b border-black/5 dark:border-white/5 pb-1.5 last:border-0 last:pb-0 gap-1">
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs font-mono border-b border-black/5 dark:border-white/5 pb-1 last:border-0 last:pb-0 gap-1">
                           <span className="font-bold text-neutral-500">
-                            {idx === 0 ? '🥇 1st Priority' : idx === 1 ? '🥈 2nd Priority' : '🥉 3rd Priority'} ({cm.type}):
+                            {idx === 0 ? t('admin.orders.primaryContact') : idx === 1 ? t('admin.orders.secondaryContact') : t('admin.orders.backupContact')} ({cm.type}):
                           </span>
-                          <span className="font-black text-purple-600 dark:text-purple-300 select-all">
+                          <span className="font-bold text-purple-600 dark:text-purple-300 select-all">
                             {cm.type === 'Phone' || cm.type === 'Viber' ? (
                               <a href={`tel:${cm.value}`} className="hover:underline">{cm.value}</a>
                             ) : cm.type === 'Email' ? (
@@ -741,34 +748,31 @@ export function AdminOrdersPage() {
                 )
               })()}
 
-
-
               {/* PAYMENT RECEIPT SECTION */}
               {(inspectTarget.payment || inspectTarget.receiptImagePath || inspectTarget.paymentSource || inspectTarget.isPayment) && (
-                <div className="rounded-2xl border border-black/10 bg-neutral-50 p-4 dark:border-white/10 dark:bg-neutral-800/50 space-y-3">
+                <div className="rounded-lg border border-black/10 bg-neutral-50 p-3.5 dark:border-white/10 dark:bg-neutral-800/50 space-y-2.5">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                    E-Wallet & Payment Receipt Proof
+                    {t('admin.orders.paymentProof')}
                   </h4>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold">
-                        Payment Method: {inspectTarget.paymentSource === 'wallet' ? 'Wallet Balance Debit' : inspectTarget.payment?.adminWalletAccount || inspectTarget.adminWalletAccount || 'Manual KBZPay / WavePay'}
+                        {t('admin.orders.paymentMethod')}: {inspectTarget.paymentSource === 'wallet' ? t('admin.orders.walletDebit') : inspectTarget.payment?.adminWalletAccount || inspectTarget.adminWalletAccount || 'Manual KBZPay / WavePay'}
                       </p>
                       <p className="text-xs text-neutral-500 mt-0.5">
-                        Amount: <strong className="text-emerald-600">{formatCurrency(inspectTarget.payment?.amountMmk || inspectTarget.totalMmk || inspectTarget.amountMmk)}</strong>
+                        {t('admin.orders.amount')}: <strong className="text-emerald-600">{formatCurrency(inspectTarget.payment?.amountMmk || inspectTarget.totalMmk || inspectTarget.amountMmk)}</strong>
                         {inspectTarget.totalUsd > 0 && (
                           <span className="ml-2 font-mono text-neutral-400">
                             (${inspectTarget.totalUsd.toFixed(2)} USD @ {inspectTarget.exchangeRateUsed || 4500} MMK/USD)
                           </span>
                         )}
                       </p>
-
                     </div>
 
                     {/* Screenshot Preview */}
                     {(receiptUrlMap[inspectTarget.id] || (inspectTarget.payment && receiptUrlMap[inspectTarget.payment.id])) && (
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2.5">
                         <button
                           type="button"
                           onClick={() =>
@@ -776,7 +780,7 @@ export function AdminOrdersPage() {
                               receiptUrlMap[inspectTarget.id] || receiptUrlMap[inspectTarget.payment?.id],
                             )
                           }
-                          className="group relative grid h-20 w-20 cursor-pointer place-items-center overflow-hidden rounded-xl border border-black/10 bg-black/5 dark:border-white/10"
+                          className="group relative grid h-16 w-16 cursor-pointer place-items-center overflow-hidden rounded-lg border border-black/10 bg-black/5 dark:border-white/10"
                         >
                           <img
                             src={receiptUrlMap[inspectTarget.id] || receiptUrlMap[inspectTarget.payment?.id]}
@@ -784,7 +788,7 @@ export function AdminOrdersPage() {
                             className="h-full w-full object-cover transition group-hover:scale-110"
                           />
                           <div className="absolute inset-0 grid place-items-center bg-black/40 opacity-0 transition group-hover:opacity-100 text-white">
-                            <Maximize2 className="h-5 w-5" />
+                            <Maximize2 className="h-4 w-4" />
                           </div>
                         </button>
 
@@ -796,9 +800,9 @@ export function AdminOrdersPage() {
                               `receipt-${inspectTarget.id}.png`,
                             )
                           }
-                          className="cursor-pointer flex items-center gap-1 rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-bold text-neutral-700 shadow-sm transition hover:bg-neutral-100 dark:border-white/10 dark:bg-neutral-800 dark:text-neutral-300"
+                          className="cursor-pointer flex items-center gap-1 rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 shadow-sm transition hover:bg-neutral-100 dark:border-white/10 dark:bg-neutral-800 dark:text-neutral-300"
                         >
-                          <Download className="h-3.5 w-3.5" /> Download Receipt
+                          <Download className="h-3.5 w-3.5" /> {t('admin.orders.download')}
                         </button>
                       </div>
                     )}
@@ -806,20 +810,20 @@ export function AdminOrdersPage() {
 
                   {/* APPROVE / REJECT ACTIONS FOR UNREVIEWED MANUAL PAYMENTS OR WALLET TOPUPS */}
                   {!isTargetFinalized && (inspectTarget.payment?.status === 'submitted' || inspectTarget.status === 'submitted' || inspectTarget.status === 'reviewing') && (
-                    <div className="mt-4 flex items-center gap-3 border-t border-black/10 pt-3 dark:border-white/10">
+                    <div className="mt-3 flex items-center gap-2.5 border-t border-black/10 pt-2.5 dark:border-white/10">
                       <button
                         type="button"
                         onClick={() => handleReviewPayment(inspectTarget.payment || inspectTarget, 'approved')}
-                        className="cursor-pointer flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700"
+                        className="cursor-pointer flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700"
                       >
-                        <Check className="h-4 w-4" /> Approve & Deposit
+                        <Check className="h-3.5 w-3.5" /> {t('admin.orders.approveDeposit')}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleReviewPayment(inspectTarget.payment || inspectTarget, 'rejected')}
-                        className="cursor-pointer flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-red-700"
+                        className="cursor-pointer flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-red-700"
                       >
-                        <X className="h-4 w-4" /> Reject Deposit Proof
+                        <X className="h-3.5 w-3.5" /> {t('admin.orders.rejectDeposit')}
                       </button>
                     </div>
                   )}
@@ -829,13 +833,13 @@ export function AdminOrdersPage() {
               {/* PURCHASED PRODUCTS RECEIPT BREAKDOWN */}
               {!inspectTarget.isPayment && (
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">
-                    Purchase Receipt & Products Breakdown
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-1.5">
+                    {t('admin.orders.purchaseReceiptBreakdown')}
                   </h4>
-                  <div className="divide-y divide-black/5 rounded-2xl border border-black/10 bg-neutral-50 p-4 dark:divide-white/5 dark:border-white/10 dark:bg-neutral-800/50">
+                  <div className="divide-y divide-black/5 rounded-lg border border-black/10 bg-neutral-50 p-3 dark:divide-white/5 dark:border-white/10 dark:bg-neutral-800/50">
                     {inspectTarget.items?.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between py-2 text-xs">
-                        <span className="font-bold">
+                      <div key={idx} className="flex items-center justify-between py-1.5 text-xs">
+                        <span className="font-semibold">
                           {item.name} {item.variantName ? `(${item.variantName})` : ''} × {item.quantity}
                         </span>
                         <span className="font-mono text-neutral-600 dark:text-neutral-400">
@@ -843,8 +847,8 @@ export function AdminOrdersPage() {
                         </span>
                       </div>
                     ))}
-                    <div className="flex items-center justify-between pt-3 font-black text-sm text-[#0b7e74]">
-                      <span>Order Total Paid</span>
+                    <div className="flex items-center justify-between pt-2 font-bold text-xs sm:text-sm text-[#0b7e74]">
+                      <span>{t('admin.orders.orderTotalPaid')}</span>
                       <span>{formatCurrency(inspectTarget.totalMmk)}</span>
                     </div>
                   </div>
@@ -852,103 +856,123 @@ export function AdminOrdersPage() {
               )}
 
               {/* READ-ONLY SENT LICENSE KEYS FOR DELIVERED/REJECTED ORDERS */}
-              {isTargetFinalized ? (
-                !inspectTarget.isPayment && (
-                  <div className="rounded-2xl border border-black/10 bg-neutral-50 p-4 dark:border-white/10 dark:bg-neutral-800/50 space-y-2">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 flex items-center gap-1.5">
-                      <Lock className="h-3.5 w-3.5 text-amber-500" />
-                      {inspectTarget.status === 'delivered' ? 'Delivered Digital Product Notes' : 'Rejection Reason'}
-                    </h4>
-                    <div className="rounded-xl border border-black/10 bg-white p-3 font-mono text-xs font-semibold whitespace-pre-line dark:border-white/10 dark:bg-neutral-900">
-                      {inspectTarget.deliveryMessage || 'No delivery message recorded.'}
+              {isTargetFinalized && !inspectTarget.isPayment && (
+                inspectTarget.status === 'delivered' ? (
+                  <div className="rounded-lg border border-[#0b7e74]/20 bg-[#0b7e74]/5 p-3.5 space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-black/5 pb-1.5 dark:border-white/5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#0b7e74] dark:text-[#67dccf] flex items-center gap-1">
+                        <Lock className="h-3 w-3" /> {t('admin.orders.deliveredCredentials')}
+                      </span>
+                      {inspectTarget.isRevealed ? (
+                        <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                          {t('admin.orders.revealedByCustomer')}
+                        </span>
+                      ) : (
+                        <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                          {t('admin.orders.protectedHidden')}
+                        </span>
+                      )}
                     </div>
+                    <p className="font-mono text-xs text-neutral-800 dark:text-neutral-200 whitespace-pre-wrap select-all">
+                      {inspectTarget.deliveryMessage || t('admin.orders.noCredentials')}
+                    </p>
                   </div>
-                )
-              ) : (
-                /* EDITABLE DIGITAL PRODUCT DELIVERY FORM FOR ACTIVE ORDERS ONLY */
-                !inspectTarget.isPayment && (
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                      Digital Product License & Delivery Message
+                ) : (
+                  <div className="rounded-lg border border-black/10 bg-neutral-50 p-3.5 dark:border-white/10 dark:bg-neutral-800/50 space-y-1.5">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 flex items-center gap-1">
+                      <Lock className="h-3.5 w-3.5 text-amber-500" />
+                      {t('admin.orders.rejectionReason')}
                     </h4>
-
-                    <textarea
-                      rows={4}
-                      placeholder="Enter license keys, redeem code, account login credentials, or delivery notes here..."
-                      value={messages[inspectTarget.id] ?? inspectTarget.deliveryMessage ?? ''}
-                      onChange={(e) =>
-                        setMessages((prev) => ({ ...prev, [inspectTarget.id]: e.target.value }))
-                      }
-                      className="w-full rounded-2xl border border-black/10 bg-neutral-50 p-3 text-xs font-mono outline-none transition focus:border-[#0b7e74] focus:ring-2 focus:ring-[#0b7e74]/20 dark:border-white/10 dark:bg-neutral-800"
-                    />
-
-                    {/* QUICK SNIPPETS */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase text-neutral-400">Snippets:</span>
-                      <button
-                        type="button"
-                        onClick={() => appendSnippet(inspectTarget.id, '🔑 License Key: XXXX-XXXX-XXXX-XXXX')}
-                        className="cursor-pointer rounded-lg bg-neutral-200 px-2.5 py-1 text-[10px] font-bold text-neutral-700 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300"
-                      >
-                        + License Key
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          appendSnippet(
-                            inspectTarget.id,
-                            '📧 Account: user@example.com\n🔒 Password: Pass1234!',
-                          )
-                        }
-                        className="cursor-pointer rounded-lg bg-neutral-200 px-2.5 py-1 text-[10px] font-bold text-neutral-700 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300"
-                      >
-                        + Account Credentials
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          appendSnippet(
-                            inspectTarget.id,
-                            '✅ Thank you for purchasing from Toodleoo Store! Enjoy your game.',
-                          )
-                        }
-                        className="cursor-pointer rounded-lg bg-neutral-200 px-2.5 py-1 text-[10px] font-bold text-neutral-700 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300"
-                      >
-                        + Thank You Note
-                      </button>
+                    <div className="rounded-lg border border-black/10 bg-white p-2.5 font-mono text-xs font-semibold whitespace-pre-line dark:border-white/10 dark:bg-neutral-900">
+                      {inspectTarget.deliveryMessage || t('admin.orders.noDeliveryMsg')}
                     </div>
-
-                    {/* DELIVER BUTTON */}
-                    <button
-                      type="button"
-                      onClick={() => handleDeliver(inspectTarget)}
-                      className="cursor-pointer w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0b7e74] px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-[#09665e]"
-                    >
-                      <Send className="h-4 w-4" /> Send Product Delivery
-                    </button>
                   </div>
                 )
               )}
 
+              {/* SECURE DELIVERY ACTION FOR ACTIVE ORDERS */}
+              {!isTargetFinalized && !inspectTarget.isPayment && (
+                <div className="space-y-2.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+                    {t('admin.orders.digitalLicense')}
+                  </h4>
+
+                  <textarea
+                    rows={3}
+                    placeholder={t('admin.orders.enterCredentialsPlaceholder')}
+                    value={messages[inspectTarget.id] ?? inspectTarget.deliveryMessage ?? ''}
+                    onChange={(e) =>
+                      setMessages((prev) => ({ ...prev, [inspectTarget.id]: e.target.value }))
+                    }
+                    className="w-full rounded-lg border border-black/10 bg-neutral-50 p-2.5 text-xs font-mono outline-none transition focus:border-[#0b7e74] focus:ring-1 focus:ring-[#0b7e74]/20 dark:border-white/10 dark:bg-neutral-800"
+                  />
+
+                  {/* QUICK SNIPPETS */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-bold uppercase text-neutral-400">{t('admin.orders.snippets')}</span>
+                    <button
+                      type="button"
+                      onClick={() => appendSnippet(inspectTarget.id, 'License Key: XXXX-XXXX-XXXX-XXXX')}
+                      className="cursor-pointer rounded-md bg-neutral-200 px-2 py-0.5 text-[10px] font-bold text-neutral-700 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300"
+                    >
+                      {t('admin.orders.addLicenseKey')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        appendSnippet(
+                          inspectTarget.id,
+                          'Account: user@example.com\nPassword: Pass1234!',
+                        )
+                      }
+                      className="cursor-pointer rounded-md bg-neutral-200 px-2 py-0.5 text-[10px] font-bold text-neutral-700 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300"
+                    >
+                      {t('admin.orders.addAccountCreds')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        appendSnippet(
+                          inspectTarget.id,
+                          'Thank you for purchasing from Toodleoo Store! Enjoy your product.',
+                        )
+                      }
+                      className="cursor-pointer rounded-md bg-neutral-200 px-2 py-0.5 text-[10px] font-bold text-neutral-700 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300"
+                    >
+                      {t('admin.orders.addThankYou')}
+                    </button>
+                  </div>
+
+                  {/* DELIVER BUTTON */}
+                  <button
+                    type="button"
+                    onClick={() => handleDeliver(inspectTarget)}
+                    className="cursor-pointer w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#0b7e74] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#09665e]"
+                  >
+                    <Send className="h-3.5 w-3.5" /> {t('admin.orders.sendProductDelivery')}
+                  </button>
+                </div>
+              )}
+
               {/* WALLET ORDER REJECT & REFUND SECTION FOR ACTIVE ORDERS ONLY */}
               {!isTargetFinalized && !inspectTarget.isPayment && (
-                <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 space-y-3">
+                <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3.5 space-y-2.5">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-red-500 flex items-center gap-1.5">
-                    <RotateCcw className="h-4 w-4" /> Reject & Refund Order
+                    <RotateCcw className="h-3.5 w-3.5" /> {t('admin.orders.rejectRefundTitle')}
                   </h4>
                   <input
                     type="text"
-                    placeholder="Reason for rejection (e.g. Out of keys, Reverting purchase)..."
+                    placeholder={t('admin.orders.rejectPlaceholder')}
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
-                    className="w-full rounded-xl border border-red-500/20 bg-white p-2.5 text-xs font-medium outline-none dark:bg-neutral-900"
+                    className="w-full rounded-lg border border-red-500/20 bg-white p-2 text-xs font-medium outline-none dark:bg-neutral-900"
                   />
                   <button
                     type="button"
                     onClick={() => handleRejectAndRefund(inspectTarget)}
-                    className="cursor-pointer w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-600 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-700"
+                    className="cursor-pointer w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-red-700"
                   >
-                    <XCircle className="h-4 w-4" /> Decline / Reject Order & Refund Wallet
+                    <XCircle className="h-3.5 w-3.5" /> {t('admin.orders.declineRefundBtn')}
                   </button>
                 </div>
               )}
@@ -960,18 +984,18 @@ export function AdminOrdersPage() {
       {/* FULL SCREEN ZOOM RECEIPT MODAL */}
       {receiptModalUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
-          <div className="relative max-h-[90vh] max-w-2xl overflow-hidden rounded-3xl bg-neutral-900 p-2">
+          <div className="relative max-h-[90vh] max-w-2xl overflow-hidden rounded-xl bg-neutral-900 p-2">
             <button
               type="button"
               onClick={() => setReceiptModalUrl('')}
-              className="cursor-pointer absolute right-4 top-4 z-10 rounded-full bg-black/60 p-2 text-white hover:bg-black"
+              className="cursor-pointer absolute right-3 top-3 z-10 rounded-lg bg-black/60 p-1.5 text-white hover:bg-black"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
             <img
               src={receiptModalUrl}
               alt="Zoom Receipt"
-              className="max-h-[85vh] w-full object-contain rounded-2xl"
+              className="max-h-[85vh] w-full object-contain rounded-lg"
             />
           </div>
         </div>
@@ -980,9 +1004,9 @@ export function AdminOrdersPage() {
       {/* DELETE CONFIRMATION MODAL */}
       <DeleteConfirmModal
         isOpen={Boolean(deleteTarget)}
-        title="Delete Record"
-        description="Are you sure you want to remove this record from your view?"
-        confirmText="Delete Record"
+        title={t('admin.orders.deleteTitle')}
+        description={t('admin.orders.deleteMsg')}
+        confirmText={t('admin.orders.deleteRecord')}
         isDeleting={isDeleting}
         onConfirm={handleDeleteConfirm}
         onClose={() => setDeleteTarget(null)}

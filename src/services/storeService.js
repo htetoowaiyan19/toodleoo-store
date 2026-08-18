@@ -23,6 +23,12 @@ function camelizeOrder(row) {
     ...row,
     createdAt: row.created_at,
     deliveryMessage: row.delivery_message,
+    deliveryType: row.delivery_type || 'key',
+    deliveryPayload: row.delivery_payload || {},
+    safekeyId: row.safekey_id,
+    isRevealed: Boolean(row.is_revealed),
+    revealedAt: row.revealed_at,
+    revealedBy: row.revealed_by,
     deliveredAt: row.delivered_at,
     deliveredBy: row.delivered_by,
     paymentSource: row.payment_source,
@@ -38,9 +44,11 @@ function camelizeOrder(row) {
 
 
 function camelizeWalletTransaction(row) {
+  const parsedAmount = Number(row.amount_mmk ?? row.amount ?? 0)
   return {
     ...row,
-    amountMmk: row.amount_mmk,
+    amount: parsedAmount,
+    amountMmk: parsedAmount,
     createdAt: row.created_at,
     createdBy: row.created_by,
     orderId: row.order_id,
@@ -57,15 +65,50 @@ function camelizeNotification(row) {
   }
 }
 
+function camelizeCustomOrder(row) {
+  return {
+    ...row,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    userId: row.user_id,
+    userEmail: row.user_email,
+    productName: row.product_name,
+    providerName: row.provider_name,
+    orderType: row.order_type,
+    accountInfo: row.account_info,
+    targetRegion: row.target_region,
+    productUrl: row.product_url,
+    contactMethods: row.contact_methods,
+    quotedPriceMmk: row.quoted_price_mmk,
+    quotedPriceUsd: row.quoted_price_usd,
+    adminNotes: row.admin_notes,
+    rejectionReason: row.rejection_reason,
+    quotedAt: row.quoted_at,
+    paymentSource: row.payment_source,
+    paymentId: row.payment_id,
+    receiptImagePath: row.receipt_image_path,
+    deliveryMessage: row.delivery_message,
+    deliveryType: row.delivery_type || 'key',
+    deliveryPayload: row.delivery_payload || {},
+    safekeyId: row.safekey_id,
+    isRevealed: Boolean(row.is_revealed),
+    revealedAt: row.revealed_at,
+    revealedBy: row.revealed_by,
+    deliveredAt: row.delivered_at,
+  }
+}
+
 function normalizeCollection(collectionName, rows) {
   if (collectionName === 'payments') return rows.map(camelizePayment)
   if (collectionName === 'orders') return rows.map(camelizeOrder)
+  if (collectionName === 'custom_orders') return rows.map(camelizeCustomOrder)
   if (collectionName === 'wallet_transactions') {
     return rows.map(camelizeWalletTransaction)
   }
   if (collectionName === 'notifications') return rows.map(camelizeNotification)
   return rows
 }
+
 
 export function subscribeUserCollection(collectionName, userId, callback) {
   if (!userId) return () => {}
@@ -236,6 +279,22 @@ export async function createManualPayment({
   receiptFile,
   user,
 }) {
+  if (purpose === 'wallet_topup') {
+    const { data: existingPending } = await supabase
+      .from('payments')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('purpose', 'wallet_topup')
+      .in('status', ['submitted', 'pending', 'uploading'])
+      .maybeSingle()
+
+    if (existingPending) {
+      throw new Error(
+        'You already have an active top-up request pending verification. Additional top-up requests are paused until your existing request is reviewed.',
+      )
+    }
+  }
+
   const paymentId = crypto.randomUUID()
 
   let receiptImagePath = ''
@@ -266,14 +325,27 @@ export async function createManualPayment({
   if (error) throw error
 
   if (orderId) {
-    await supabase
-      .from('orders')
-      .update({
-        status: 'submitted',
-        is_submitted: true,
-        receipt_image_path: receiptImagePath,
-      })
-      .eq('id', orderId)
+    if (purpose === 'custom_order') {
+      await supabase
+        .from('custom_orders')
+        .update({
+          status: 'submitted',
+          payment_source: 'manual_payment',
+          payment_id: payment.id,
+          receipt_image_path: receiptImagePath,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId)
+    } else {
+      await supabase
+        .from('orders')
+        .update({
+          status: 'submitted',
+          is_submitted: true,
+          receipt_image_path: receiptImagePath,
+        })
+        .eq('id', orderId)
+    }
   }
 
   await supabase.from('notifications').insert({
@@ -284,6 +356,7 @@ export async function createManualPayment({
     type: 'payment_submitted',
     user_id: user.id,
   })
+
 
   return payment.id
 }
@@ -299,6 +372,8 @@ export async function createOrderFromCart({ items, paymentSource, couponCode = n
     slug: item.slug || item.id,
     variantName: item.variantName || '',
     variantId: item.selectedVariant?.id || item.itemId || '',
+    hasServicePlus: Boolean(item.hasServicePlus || item.has_service_plus || item.selectedVariant?.hasServicePlus || false),
+    warrantyMonths: Number(item.warrantyMonths || item.warranty_months || item.selectedVariant?.warrantyMonths || 18),
   }))
 
   const { data, error } = await supabase.rpc('create_order_from_cart', {
@@ -313,6 +388,126 @@ export async function createOrderFromCart({ items, paymentSource, couponCode = n
   return data
 }
 
+/**
+ * Unified Payment Processor
+ * Takes all payment details in a single parameter object, processes the payment,
+ * and returns { success: boolean, ... } to complete the payment flow.
+ */
+export async function processPayment({
+  purpose = 'order_payment',
+  paymentMethod = 'wallet',
+  amountMmk,
+  user,
+  orderId = null,
+  draftOrder = null,
+  receiptFile = null,
+}) {
+  try {
+    if (!user?.id) {
+      throw new Error('Authentication is required to process payment.')
+    }
+    if (!amountMmk || Number(amountMmk) <= 0) {
+      throw new Error('Invalid payment amount.')
+    }
+
+    // -------------------------------------------------------------
+    // FLOW 1: WALLET PAYMENT
+    // -------------------------------------------------------------
+    if (paymentMethod === 'wallet') {
+      if (purpose === 'custom_order') {
+        if (!orderId) throw new Error('Custom order reference is missing.')
+        await payCustomOrderWithWallet({
+          customOrderId: orderId,
+          amountMmk: Number(amountMmk),
+        })
+        return {
+          success: true,
+          orderId,
+          method: 'wallet',
+          amount: Number(amountMmk),
+          type: 'custom_order',
+        }
+      }
+
+      if (purpose === 'order_payment') {
+        const items = draftOrder?.items || []
+        const couponCode = draftOrder?.couponCode || draftOrder?.coupon?.code || null
+        const contactMethods = draftOrder?.contactMethods || draftOrder?.contact_methods || []
+
+        if (!items || items.length === 0) {
+          throw new Error('No items found to process order.')
+        }
+
+        const newOrderId = await createOrderFromCart({
+          items,
+          paymentSource: 'wallet',
+          couponCode,
+          contactMethods,
+        })
+
+        return {
+          success: true,
+          orderId: newOrderId,
+          method: 'wallet',
+          amount: Number(amountMmk),
+          type: 'order',
+        }
+      }
+
+      throw new Error(`Unsupported purpose '${purpose}' for wallet payment.`)
+    }
+
+    // -------------------------------------------------------------
+    // FLOW 2: MANUAL PAYMENT (KBZPay / WavePay / Mobile Banking)
+    // -------------------------------------------------------------
+    if (paymentMethod === 'manual_payment') {
+      if (!receiptFile) {
+        throw new Error('Please upload your payment transfer receipt screenshot.')
+      }
+
+      let finalOrderId = orderId
+
+      // If store order from draft, insert real order record in DB
+      if (purpose === 'order_payment') {
+        if (orderId && orderId.startsWith('draft-') && draftOrder && Array.isArray(draftOrder.items)) {
+          finalOrderId = await createOrderFromCart({
+            items: draftOrder.items,
+            paymentSource: 'manual_payment',
+            couponCode: draftOrder.couponCode || null,
+            contactMethods: draftOrder.contactMethods || draftOrder.contact_methods || [],
+          })
+        }
+      }
+
+      const paymentId = await createManualPayment({
+        amountMmk: Number(amountMmk),
+        orderId: finalOrderId,
+        purpose,
+        receiptFile,
+        user,
+      })
+
+      return {
+        success: true,
+        orderId: finalOrderId,
+        paymentId,
+        method: 'manual_payment',
+        amount: Number(amountMmk),
+        type: purpose,
+      }
+    }
+
+    throw new Error(`Unknown payment method: ${paymentMethod}`)
+  } catch (err) {
+    console.error('Payment processing failed:', err)
+    return {
+      success: false,
+      error: err.message || 'Payment processing failed. Please try again.',
+    }
+  }
+}
+
+
 
 
 
@@ -326,60 +521,142 @@ export async function reviewPayment({ payment, reviewNote = '', status }) {
   if (error) throw error
 }
 
-export async function deliverOrder({ deliveryMessage, orderId }) {
-  // 1. Auto-approve attached payment if not already approved when admin delivers
-  const { data: payments } = await supabase
-    .from('payments')
-    .select('id, status')
-    .eq('order_id', orderId)
+/**
+ * Unified Secure Digital Delivery Processor
+ * Delivers digital keys/credentials for Store Orders & Custom Orders with protection.
+ */
+export async function deliverSecureCredentials({
+  orderId,
+  orderType = 'order', // 'order' | 'custom_order'
+  deliveryType = 'key', // 'key' | 'account' | 'activation_link' | 'text'
+  deliveryMessage = '',
+  deliveryPayload = {},
+}) {
+  const safekeyId = `KEY-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+  const table = orderType === 'custom_order' ? 'custom_orders' : 'orders'
 
-  if (payments && payments.length > 0) {
-    for (const p of payments) {
-      if (p.status !== 'approved') {
-        await supabase
-          .from('payments')
-          .update({ status: 'approved', reviewed_at: new Date().toISOString() })
-          .eq('id', p.id)
-      }
-    }
+  const updatePayload = {
+    status: 'delivered',
+    safekey_id: safekeyId,
+    delivery_type: deliveryType,
+    delivery_message: deliveryMessage,
+    delivery_payload: deliveryPayload || {},
+    is_revealed: false,
+    delivered_at: new Date().toISOString(),
+  }
+  if (orderType === 'custom_order') {
+    updatePayload.updated_at = new Date().toISOString()
   }
 
-  // 2. Mark order as delivered with delivery message
-  const { error } = await supabase
-    .from('orders')
-    .update({
+  // 1. Direct resilient update
+  let updatedRow = null
+  const { data, error: directError } = await supabase
+    .from(table)
+    .update(updatePayload)
+    .eq('id', orderId)
+    .select()
+    .single()
+
+  if (directError) {
+    // If extra columns like delivery_payload or safekey_id don't exist yet, fallback to basic update
+    const basicPayload = {
       status: 'delivered',
       delivery_message: deliveryMessage,
       delivered_at: new Date().toISOString(),
-    })
-    .eq('id', orderId)
+    }
+    if (orderType === 'custom_order') {
+      basicPayload.updated_at = new Date().toISOString()
+    }
+    const { data: basicRow, error: basicError } = await supabase
+      .from(table)
+      .update(basicPayload)
+      .eq('id', orderId)
+      .select()
+      .single()
 
-  if (error) {
-    const { error: rpcError } = await supabase.rpc('deliver_manual_order', {
-      delivery_message_input: deliveryMessage,
-      order_id_input: orderId,
-    })
-    if (rpcError) throw rpcError
+    if (basicError) throw basicError
+    updatedRow = basicRow
+  } else {
+    updatedRow = data
   }
 
-  // 3. Send delivered notification to customer
-  const { data: order } = await supabase
-    .from('orders')
-    .select('user_id')
+  // 2. Auto-approve attached payment if pending
+  if (orderType === 'order') {
+    await supabase
+      .from('payments')
+      .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+      .eq('order_id', orderId)
+      .eq('status', 'submitted')
+  }
+
+  // 3. Send customer delivery notification
+  try {
+    const userId = updatedRow?.user_id || updatedRow?.userId
+    if (userId) {
+      await supabase.from('notifications').insert({
+        audience: 'customer',
+        message: `Your order #${orderId.slice(0, 8)} has been delivered! Click to view your credentials.`,
+        read: false,
+        title: 'Order Delivered',
+        type: 'order_delivered',
+        user_id: userId,
+      })
+    }
+  } catch (notifErr) {
+    console.warn('Failed to insert delivery notification:', notifErr)
+  }
+
+  return orderType === 'custom_order' ? camelizeCustomOrder(updatedRow) : camelizeOrder(updatedRow)
+}
+
+/**
+ * Unified Digital Key Unlock & Reveal Function
+ * Reveals digital credentials upon customer request.
+ */
+export async function claimAndRevealSafeKey({ orderId, orderType = 'order', user }) {
+  const table = orderType === 'custom_order' ? 'custom_orders' : 'orders'
+  const nowIso = new Date().toISOString()
+
+  const updatePayload = {
+    is_revealed: true,
+    revealed_at: nowIso,
+    revealed_by: user?.id || null,
+  }
+  if (orderType === 'custom_order') {
+    updatePayload.updated_at = nowIso
+  }
+
+  const { data: updatedRow, error: directError } = await supabase
+    .from(table)
+    .update(updatePayload)
     .eq('id', orderId)
+    .select()
     .single()
 
-  if (order?.user_id) {
-    await supabase.from('notifications').insert({
-      audience: 'customer',
-      message: `Your order #${orderId.slice(0, 8)} has been approved and delivered! Click to view code.`,
-      read: false,
-      title: 'Order Delivered 🎉',
-      type: 'order_delivered',
-      user_id: order.user_id,
-    })
+  if (directError) {
+    // If is_revealed column is not in DB yet, fetch row and return with client-side isRevealed = true
+    const { data: fallbackRow } = await supabase.from(table).select('*').eq('id', orderId).single()
+    if (fallbackRow) {
+      const camelized = orderType === 'custom_order' ? camelizeCustomOrder(fallbackRow) : camelizeOrder(fallbackRow)
+      return { ...camelized, isRevealed: true, revealedAt: nowIso }
+    }
+    throw directError
   }
+
+  return orderType === 'custom_order' ? camelizeCustomOrder(updatedRow) : camelizeOrder(updatedRow)
 }
+
+export const claimAndRevealCredentials = claimAndRevealSafeKey
+
+export async function deliverOrder({ deliveryMessage, orderId }) {
+  return deliverSecureCredentials({
+    orderId,
+    orderType: 'order',
+    deliveryType: 'key',
+    deliveryMessage,
+  })
+}
+
 export async function getExchangeRateSettings() {
   try {
     const { data, error } = await supabase
@@ -502,14 +779,15 @@ export async function saveProduct(product) {
 
   const productPayload = {
     badge: product.badge || null,
-    category: product.category || 'Digital',
+    tag: product.tag || 'Game',
+    type: product.type || 'Key',
+    region: product.region || 'Global',
     delivery_type: 'manual_text',
     description: product.description || '',
     featured: Boolean(product.featured),
     gradient: product.gradient || 'from-[#0fa697] to-[#ff655b]',
     image: product.image || '',
     name: product.name,
-    platform: product.platform || 'Manual',
     product_type: isGroup ? 'group' : 'single',
     slug: product.slug,
     tags:
@@ -518,9 +796,9 @@ export async function saveProduct(product) {
         : product.tags || [],
     required_fields: product.requiredFields || [],
     price_usd: singlePriceUsd,
+    has_service_plus: Boolean(product.hasServicePlus || product.has_service_plus || false),
+    warranty_months: Number(product.warrantyMonths || product.warranty_months || 18),
   }
-
-
 
   let productId = product.id
 
@@ -544,6 +822,8 @@ export async function saveProduct(product) {
   if (!isGroup) {
     const singleStock = Number(product.stock || 0)
     const singleStatus = product.status || (singleStock > 0 ? 'instock' : 'out-of-stock')
+    const hasSp = Boolean(product.hasServicePlus || product.has_service_plus || false)
+    const wm = Number(product.warrantyMonths || product.warranty_months || 18)
 
     const { data: existingItems } = await supabase
       .from('items')
@@ -559,6 +839,8 @@ export async function saveProduct(product) {
           price_usd: singlePriceUsd,
           stock: singleStock,
           status: singleStatus,
+          has_service_plus: hasSp,
+          warranty_months: wm,
           updated_at: new Date().toISOString(),
         })
         .eq('id', firstItemId)
@@ -575,6 +857,8 @@ export async function saveProduct(product) {
           price_usd: singlePriceUsd,
           stock: singleStock,
           status: singleStatus,
+          has_service_plus: hasSp,
+          warranty_months: wm,
         },
       ])
     }
@@ -597,7 +881,8 @@ export async function saveProduct(product) {
       }
     }
 
-    for (const it of rawItems) {
+    for (let idx = 0; idx < rawItems.length; idx++) {
+      const it = rawItems[idx]
       const itemPriceUsd = sanitizeUsd(
         it.priceUsd !== undefined ? it.priceUsd : it.price_usd || it.price || 0,
         product.exchangeRate || 4500,
@@ -605,6 +890,8 @@ export async function saveProduct(product) {
 
       const itemStock = Number(it.stock || 0)
       const itemStatus = it.status || (itemStock > 0 ? 'instock' : 'out-of-stock')
+      const itemHasSp = Boolean(it.hasServicePlus || it.has_service_plus || false)
+      const itemWm = Number(it.warrantyMonths || it.warranty_months || 18)
 
       if (it.id && typeof it.id === 'string' && it.id.length === 36) {
         await supabase
@@ -614,6 +901,9 @@ export async function saveProduct(product) {
             price_usd: itemPriceUsd,
             stock: itemStock,
             status: itemStatus,
+            has_service_plus: itemHasSp,
+            warranty_months: itemWm,
+            sort_order: idx,
             updated_at: new Date().toISOString(),
           })
           .eq('id', it.id)
@@ -625,6 +915,9 @@ export async function saveProduct(product) {
             price_usd: itemPriceUsd,
             stock: itemStock,
             status: itemStatus,
+            has_service_plus: itemHasSp,
+            warranty_months: itemWm,
+            sort_order: idx,
           },
         ])
       }
@@ -858,5 +1151,367 @@ export async function rejectAndRefundOrder(orderId, reason = '') {
 
   if (error) throw error
 }
+
+// ============================================================================
+// CUSTOMIZED ORDERING SERVICE FUNCTIONS
+// ============================================================================
+
+export async function getDailyCustomOrderCount(userId) {
+  if (!userId) return 0
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+  const { data, error } = await supabase
+    .from('custom_orders')
+    .select('id')
+    .eq('user_id', userId)
+    .gte('created_at', yesterday)
+
+  if (error) {
+    console.error('Error fetching daily custom order count:', error)
+    return 0
+  }
+  return data?.length || 0
+}
+
+export async function createCustomOrder({
+  user,
+  productName,
+  providerName,
+  orderType = 'Key',
+  accountInfo = {},
+  targetRegion = 'Global',
+  productUrl = '',
+  notes = '',
+  contactMethods = [],
+}) {
+  if (!user?.id) throw new Error('You must be signed in to submit a customized order request.')
+
+  // Check 3/day quota
+  const todayCount = await getDailyCustomOrderCount(user.id)
+  if (todayCount >= 3) {
+    throw new Error('Daily limit reached. You can create up to 3 customized orders per day.')
+  }
+
+  const payload = {
+    user_id: user.id,
+    user_email: user.email,
+    product_name: productName.trim(),
+    provider_name: providerName.trim(),
+    order_type: orderType,
+    account_info: accountInfo || {},
+    target_region: targetRegion || 'Global',
+    product_url: productUrl ? productUrl.trim() : null,
+    notes: notes ? notes.trim() : null,
+    contact_methods: Array.isArray(contactMethods) ? contactMethods : [],
+    status: 'pending_quote',
+  }
+
+  const { data, error } = await supabase
+    .from('custom_orders')
+    .insert([payload])
+    .select()
+    .single()
+
+  if (error) throw error
+
+  // Notify admin of incoming custom order request
+  await supabase.from('notifications').insert({
+    audience: 'admin',
+    message: `${user.email} requested a custom order: "${productName}" (${providerName}).`,
+    read: false,
+    title: 'New Custom Order Request',
+    type: 'custom_order_requested',
+    user_id: user.id,
+  })
+
+  return camelizeCustomOrder(data)
+}
+
+export async function quoteCustomOrder({ id, priceMmk, priceUsd = null, adminNotes = '' }) {
+  const { data, error } = await supabase
+    .from('custom_orders')
+    .update({
+      quoted_price_mmk: Number(priceMmk),
+      quoted_price_usd: priceUsd ? Number(priceUsd) : null,
+      admin_notes: adminNotes || null,
+      status: 'quoted',
+      quoted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+
+  if (data?.user_id) {
+    await supabase.from('notifications').insert({
+      audience: 'customer',
+      message: `Your custom request for "${data.product_name}" was approved! Quoted price: ${Number(priceMmk).toLocaleString()} MMK. Click to pay.`,
+      read: false,
+      title: 'Custom Order Quoted',
+      type: 'custom_order_quoted',
+      user_id: data.user_id,
+    })
+  }
+
+  return camelizeCustomOrder(data)
+}
+
+export async function rejectCustomOrder({ id, reason = '' }) {
+  const { data, error } = await supabase
+    .from('custom_orders')
+    .update({
+      status: 'rejected',
+      rejection_reason: reason || 'Unable to fulfill this customized request at this time.',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+
+  if (data?.user_id) {
+    await supabase.from('notifications').insert({
+      audience: 'customer',
+      message: `Your custom order request for "${data.product_name}" could not be fulfilled: ${reason || 'Unavailable'}`,
+      read: false,
+      title: 'Custom Order Declined',
+      type: 'custom_order_rejected',
+      user_id: data.user_id,
+    })
+  }
+
+  return camelizeCustomOrder(data)
+}
+
+export async function payCustomOrderWithWallet({ customOrderId, amountMmk }) {
+  const { data, error } = await supabase.rpc('pay_custom_order_with_wallet', {
+    custom_order_id_input: customOrderId,
+    amount_mmk_input: Number(amountMmk),
+  })
+
+  if (error) throw error
+  return data
+}
+
+export async function cancelCustomOrder(id) {
+  const { data, error } = await supabase
+    .from('custom_orders')
+    .update({
+      status: 'cancelled',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return camelizeCustomOrder(data)
+}
+
+export async function deliverCustomOrder({ customOrderId, deliveryMessage }) {
+  const { data, error } = await supabase
+    .from('custom_orders')
+    .update({
+      status: 'delivered',
+      delivery_message: deliveryMessage,
+      delivered_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', customOrderId)
+    .select()
+    .single()
+
+  if (error) throw error
+
+  if (data?.user_id) {
+    await supabase.from('notifications').insert({
+      audience: 'customer',
+      message: `Your customized order for "${data.product_name}" is delivered! Check your order details to view credentials/keys.`,
+      read: false,
+      title: 'Custom Order Delivered',
+      type: 'custom_order_delivered',
+      user_id: data.user_id,
+    })
+  }
+
+  return camelizeCustomOrder(data)
+}
+
+export async function deleteCustomOrder(id) {
+  const { error } = await supabase
+    .from('custom_orders')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
+}
+
+/**
+ * ----------------------------------------------------------------------------
+ * VIP SUBSCRIPTION MANAGEMENT METHODS
+ * ----------------------------------------------------------------------------
+ */
+
+export async function subscribeToPlanWithWallet({ planId, billingCycle = 'monthly', user }) {
+  if (!user?.id) throw new Error('User authentication required.')
+
+  const prices = {
+    lunar: { monthly: 4999, yearly: 49999, days: { monthly: 30, yearly: 365 } },
+    lunar_plus: { monthly: 9999, yearly: 99999, days: { monthly: 30, yearly: 365 } },
+    stellar: { monthly: 49999, yearly: 499999, days: { monthly: 30, yearly: 365 } },
+  }
+
+  const planInfo = prices[planId]
+  if (!planInfo) throw new Error('Invalid plan selected.')
+  const priceMmk = planInfo[billingCycle]
+  const durationDays = planInfo.days[billingCycle]
+
+  // 1. Attempt RPC first
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc('purchase_subscription_with_wallet', {
+      user_id_input: user.id,
+      plan_id_input: planId,
+      billing_cycle_input: billingCycle,
+    })
+
+    if (!rpcError && rpcData?.success) {
+      return rpcData
+    }
+  } catch (rpcErr) {
+    console.warn('RPC purchase_subscription_with_wallet failed, falling back:', rpcErr)
+  }
+
+  // 2. Direct fallback update
+  const { data: profile, error: profileErr } = await supabase
+    .from('profiles')
+    .select('wallet_balance, subscription_tier, subscription_expires_at')
+    .eq('id', user.id)
+    .single()
+
+  if (profileErr) throw profileErr
+  if ((profile.wallet_balance || 0) < priceMmk) {
+    throw new Error(
+      `Insufficient wallet balance. You have ${(profile.wallet_balance || 0).toLocaleString()} MMK, but ${priceMmk.toLocaleString()} MMK is required.`,
+    )
+  }
+
+  const now = new Date()
+  let expiresAt = new Date()
+  if (
+    profile.subscription_tier === planId &&
+    profile.subscription_expires_at &&
+    new Date(profile.subscription_expires_at) > now
+  ) {
+    expiresAt = new Date(new Date(profile.subscription_expires_at).getTime() + durationDays * 24 * 60 * 60 * 1000)
+  } else {
+    expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000)
+  }
+
+  // Deduct wallet balance and set tier
+  const { data: updatedProfile, error: updateErr } = await supabase
+    .from('profiles')
+    .update({
+      wallet_balance: (profile.wallet_balance || 0) - priceMmk,
+      subscription_tier: planId,
+      subscription_billing: billingCycle,
+      subscription_expires_at: expiresAt.toISOString(),
+      subscription_auto_renew: true,
+      subscription_started_at: new Date().toISOString(),
+    })
+    .eq('id', user.id)
+    .select()
+    .single()
+
+  if (updateErr) throw updateErr
+
+  // Record wallet transaction
+  await supabase.from('wallet_transactions').insert({
+    user_id: user.id,
+    type: 'debit',
+    amount_mmk: priceMmk,
+    created_by: user.id,
+  })
+
+  // Record subscription log
+  try {
+    await supabase.from('subscriptions').insert({
+      user_id: user.id,
+      user_email: user.email,
+      tier: planId,
+      billing_cycle: billingCycle,
+      price_mmk: priceMmk,
+      started_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+      status: 'active',
+      auto_renew: true,
+    })
+  } catch (e) {
+    console.warn('Subscriptions table log error:', e)
+  }
+
+  return {
+    success: true,
+    tier: planId,
+    billingCycle,
+    priceMmk,
+    expiresAt: expiresAt.toISOString(),
+  }
+}
+
+export async function toggleSubscriptionAutoRenew({ user, enabled }) {
+  if (!user?.id) throw new Error('User authentication required.')
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ subscription_auto_renew: Boolean(enabled) })
+    .eq('id', user.id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function cancelSubscriptionPlan({ user }) {
+  if (!user?.id) throw new Error('User authentication required.')
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({
+      subscription_auto_renew: false,
+    })
+    .eq('id', user.id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function checkAndProcessAutoRenewal({ user, profile }) {
+  if (!user?.id || !profile) return null
+  const tier = profile.subscriptionTier || profile.subscription_tier || 'free'
+  if (tier === 'free') return null
+
+  const expiresAt = profile.subscriptionExpiresAt || profile.subscription_expires_at
+  if (!expiresAt) return null
+
+  const now = new Date()
+  const isExpired = new Date(expiresAt) <= now
+  if (!isExpired) return null
+
+  // If expired, try auto-renewal RPC
+  try {
+    const { data: result } = await supabase.rpc('renew_subscription_with_wallet', {
+      user_id_input: user.id,
+    })
+    return result
+  } catch (err) {
+    console.warn('Auto renewal check warning:', err)
+    return null
+  }
+}
+
 
 

@@ -2,6 +2,22 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../supabase'
 import { AuthContext } from '../../utils/authContext'
 
+function normalizeProfile(data) {
+  if (!data) return null
+  return {
+    ...data,
+    displayName: data.display_name,
+    walletBalance: data.wallet_balance ?? 0,
+    contactMethods: data.contact_methods || [],
+    role: data.role || 'customer',
+    subscriptionTier: data.subscription_tier || 'free',
+    subscriptionBilling: data.subscription_billing || null,
+    subscriptionExpiresAt: data.subscription_expires_at || null,
+    subscriptionAutoRenew: Boolean(data.subscription_auto_renew ?? true),
+    subscriptionStartedAt: data.subscription_started_at || null,
+  }
+}
+
 async function fetchProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
@@ -10,14 +26,7 @@ async function fetchProfile(userId) {
     .single()
 
   if (error && error.code !== 'PGRST116') throw error
-  return data
-    ? {
-        ...data,
-        displayName: data.display_name,
-        walletBalance: data.wallet_balance,
-        contactMethods: data.contact_methods || [],
-      }
-    : null
+  return normalizeProfile(data)
 }
 
 
@@ -63,12 +72,11 @@ export function AuthProvider({ children }) {
           table: 'profiles',
           filter: `id=eq.${user.id}`,
         },
-        (payload) =>
-          setProfile({
-            ...payload.new,
-            displayName: payload.new.display_name,
-            walletBalance: payload.new.wallet_balance,
-          }),
+        (payload) => {
+          if (payload?.new) {
+            setProfile(normalizeProfile(payload.new))
+          }
+        },
       )
       .subscribe()
 

@@ -28,7 +28,13 @@ function parsePriceUsd(usdVal, exchangeRate = 4500) {
 }
 
 function normalizeProduct(data, exchangeRate = 4500, taxPercent = 0, serviceFeePercent = 0) {
-  const childItems = Array.isArray(data.items) ? data.items : []
+  const rawChildItems = Array.isArray(data.items) ? data.items : []
+  const childItems = [...rawChildItems].sort((a, b) => {
+    const orderA = Number(a.sort_order ?? a.sortOrder ?? 0)
+    const orderB = Number(b.sort_order ?? b.sortOrder ?? 0)
+    if (orderA !== orderB) return orderA - orderB
+    return (a.created_at || '').localeCompare(b.created_at || '')
+  })
   const isGroup = data.product_type === 'group' || childItems.length > 1
   const firstItem = childItems[0]
 
@@ -43,6 +49,9 @@ function normalizeProduct(data, exchangeRate = 4500, taxPercent = 0, serviceFeeP
   const baseStock = Number(firstItem?.stock !== undefined ? firstItem.stock : data.stock || 0)
   const baseStatus = firstItem?.status || data.status || (baseStock > 0 ? 'instock' : 'out-of-stock')
 
+  const baseHasServicePlus = Boolean(data.has_service_plus || firstItem?.has_service_plus || firstItem?.hasServicePlus || false)
+  const baseWarrantyMonths = Number(data.warranty_months || firstItem?.warranty_months || firstItem?.warrantyMonths || 18)
+
   const items = isGroup
     ? childItems.map((i, idx) => {
         const itemUsd = parsePriceUsd(i.price_usd, exchangeRate)
@@ -54,6 +63,9 @@ function normalizeProduct(data, exchangeRate = 4500, taxPercent = 0, serviceFeeP
           priceMmk: itemMmk,
           stock: Number(i.stock || 0),
           status: i.status || (i.stock > 0 ? 'instock' : 'out-of-stock'),
+          hasServicePlus: Boolean(i.has_service_plus || i.hasServicePlus || false),
+          warrantyMonths: Number(i.warranty_months || i.warrantyMonths || 18),
+          sortOrder: i.sort_order !== undefined ? Number(i.sort_order) : idx,
         }
       })
     : [
@@ -64,13 +76,17 @@ function normalizeProduct(data, exchangeRate = 4500, taxPercent = 0, serviceFeeP
           priceMmk: basePriceMmk,
           stock: baseStock,
           status: baseStatus,
+          hasServicePlus: baseHasServicePlus,
+          warrantyMonths: baseWarrantyMonths,
         },
       ]
 
   return {
     id: data.id,
     badge: data.badge || null,
-    category: data.category || 'Digital',
+    tag: data.tag || 'Game',
+    type: data.type || 'Key',
+    region: data.region || 'Global',
     description: data.description || '',
     deliveryType: data.delivery_type || 'manual_text',
     featured: Boolean(data.featured),
@@ -79,8 +95,9 @@ function normalizeProduct(data, exchangeRate = 4500, taxPercent = 0, serviceFeeP
     includes: data.includes || data.tags || [],
     items,
     itemId: firstItem?.id || null,
+    hasServicePlus: baseHasServicePlus,
+    warrantyMonths: baseWarrantyMonths,
     name: data.name || 'Untitled product',
-    platform: data.platform || 'Digital',
     price: basePriceMmk,
     priceUsd: basePriceUsd,
     priceMmk: basePriceMmk,
@@ -102,6 +119,9 @@ function normalizeFallback(product, exchangeRate = 4500, taxPercent = 0, service
 
   return {
     ...product,
+    tag: product.tag || 'Game',
+    type: product.type || 'Key',
+    region: product.region || 'Global',
     priceUsd: basePriceUsd,
     priceMmk: basePriceMmk,
     basePriceMmk: basePriceMmk,
@@ -120,9 +140,11 @@ function normalizeFallback(product, exchangeRate = 4500, taxPercent = 0, service
         status: 'instock',
       },
     ],
-    tags: [product.category, product.platform],
+    tags: [product.tag, product.type, product.region],
   }
 }
+
+
 
 export function ProductProvider({ children }) {
   const [exchangeRate, setExchangeRate] = useState(4500)
@@ -233,13 +255,16 @@ export function ProductProvider({ children }) {
     const updated = await updateFeeSettings({ taxPercent: newTax, serviceFeePercent: newFee })
     setTaxPercent(updated.taxPercent)
     setServiceFeePercent(updated.serviceFeePercent)
-    await loadProducts(exchangeRate, updated.taxPercent, updated.serviceFeePercent)
+    await fetchAndNormalizeProducts(exchangeRate, updated.taxPercent, updated.serviceFeePercent)
     return updated
-  }, [exchangeRate, loadProducts])
+  }, [exchangeRate, fetchAndNormalizeProducts])
 
   const value = useMemo(() => {
-    const categories = ['All', ...new Set(products.map((item) => item.category))]
-    const platforms = ['All', ...new Set(products.map((item) => item.platform))]
+    const tags = ['All', ...new Set(products.map((item) => item.tag || 'Game'))]
+    const types = ['All', ...new Set(products.map((item) => item.type || 'Key'))]
+    const regions = ['All', ...new Set(products.map((item) => item.region || 'Global'))]
+    const categories = tags
+    const platforms = types
 
     const refreshProducts = async () => {
       const settings = await loadExchangeRate()
@@ -257,9 +282,12 @@ export function ProductProvider({ children }) {
     }
 
     return {
+      tags,
+      types,
+      regions,
       categories,
-      loading,
       platforms,
+      loading,
       products,
       maxProductPrice,
       exchangeRate,
@@ -275,6 +303,7 @@ export function ProductProvider({ children }) {
       updateFees,
     }
   }, [loading, products, maxProductPrice, exchangeRate, taxPercent, serviceFeePercent, lastSyncedAt, convertUsdToMmk, formatCurrency, formatUsdToMmk, formatPriceRange, loadExchangeRate, fetchAndNormalizeProducts, updateFees])
+
 
 
   return <ProductContext.Provider value={value}>{children}</ProductContext.Provider>

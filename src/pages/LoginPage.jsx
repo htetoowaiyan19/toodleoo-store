@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router'
 import { useAuth } from '../utils/useAuth'
+import { useTranslation } from '../utils/useTranslation'
 
 function formatAuthError(error) {
   if (!error) return ''
@@ -38,6 +39,7 @@ function formatAuthError(error) {
 export function LoginPage() {
   const { signInWithGoogle, signInWithPassword, signUpWithPassword, user } =
     useAuth()
+  const { t } = useTranslation()
   const [isSignup, setIsSignup] = useState(false)
   const [form, setForm] = useState({ displayName: '', email: '', password: '' })
   const [error, setError] = useState('')
@@ -76,11 +78,10 @@ export function LoginPage() {
   return (
     <section className="mx-auto grid max-w-5xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-2 lg:px-8">
       <div>
-        <p className="font-bold text-[#0b7e74]">Secure account</p>
-        <h1 className="mt-2 text-4xl font-black">Sign in to shop with wallet payments</h1>
+        <p className="font-bold text-[#0b7e74]">{t('auth.secureAccount')}</p>
+        <h1 className="mt-2 text-4xl font-black">{t('auth.signInTitle')}</h1>
         <p className="mt-4 text-neutral-600 dark:text-white/60">
-          Your account stores wallet balance, manual payment receipts, order
-          delivery messages, and notifications.
+          {t('auth.signInSubtitle')}
         </p>
       </div>
       <form
@@ -89,7 +90,7 @@ export function LoginPage() {
       >
         {isSignup && (
           <label className="block text-sm font-bold">
-            Name
+            {t('auth.name')}
             <input
               value={form.displayName}
               onChange={(event) =>
@@ -101,7 +102,7 @@ export function LoginPage() {
           </label>
         )}
         <label className={`${isSignup ? 'mt-4' : ''} block text-sm font-bold`}>
-          Email
+          {t('auth.email')}
           <input
             type="email"
             value={form.email}
@@ -111,7 +112,7 @@ export function LoginPage() {
           />
         </label>
         <label className="mt-4 block text-sm font-bold">
-          Password
+          {t('auth.password')}
           <input
             type="password"
             value={form.password}
@@ -138,22 +139,22 @@ export function LoginPage() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="mt-6 w-full cursor-pointer rounded-full bg-neutral-950 px-5 py-3 font-black text-white transition-all duration-200 hover:bg-neutral-800 hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200"
+          className="mt-6 w-full cursor-pointer rounded-lg bg-neutral-950 px-5 py-3 font-bold text-white transition-all duration-200 hover:bg-neutral-800 hover:shadow-sm active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 text-sm"
         >
           {isSubmitting
-            ? 'Processing...'
+            ? t('common.loading')
             : isSignup
-              ? 'Create account'
-              : 'Sign in'}
+              ? t('auth.createAccount')
+              : t('auth.signIn')}
         </button>
 
         <button
           type="button"
           disabled={isSubmitting}
           onClick={handleGoogleSignIn}
-          className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-black/10 px-5 py-3 font-black transition-all duration-200 hover:border-black/30 hover:bg-neutral-100 hover:shadow-sm active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:hover:border-white/30 dark:hover:bg-neutral-800"
+          className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-black/10 px-5 py-2.5 font-bold transition-all duration-200 hover:border-black/30 hover:bg-neutral-100 hover:shadow-sm active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:hover:border-white/30 dark:hover:bg-neutral-800 text-sm"
         >
-          <svg className="h-5 w-5" viewBox="0 0 24 24">
+          <svg className="h-4 w-4" viewBox="0 0 24 24">
             <path
               fill="#4285F4"
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -171,7 +172,7 @@ export function LoginPage() {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          Continue with Google
+          {t('auth.continueGoogle')}
         </button>
 
         <div className="mt-4 text-center">
@@ -183,11 +184,12 @@ export function LoginPage() {
             }}
             className="cursor-pointer font-bold text-[#0b7e74] transition-colors hover:text-[#09665e] hover:underline"
           >
-            {isSignup ? 'Already have an account? Sign in' : 'Create a new account'}
+            {isSignup ? t('auth.alreadyHaveAccount') : t('auth.createAccountLink')}
           </button>
         </div>
       </form>
     </section>
   )
 }
+
 

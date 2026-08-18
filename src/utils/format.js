@@ -36,5 +36,6 @@ export function formatPriceRange(minMmk = 0, maxMmk = 0) {
   const maxVal = Math.round(Number(maxMmk || 0))
 
   if (minVal === maxVal) return formatCurrency(minVal)
-  return `MMK ${formatNumber(minVal)} - ${formatNumber(maxVal)}`
+  return `From MMK ${formatNumber(minVal)}`
 }
+
