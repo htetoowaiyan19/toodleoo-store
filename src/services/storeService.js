@@ -663,7 +663,13 @@ export async function getExchangeRateSettings() {
       .from('store_settings')
       .select('key, value')
 
-    if (error || !data) return { rate: 4500, taxPercent: 0, serviceFeePercent: 0, lastSyncedAt: null }
+    if (error) {
+      try {
+        window.dispatchEvent(new CustomEvent('toodleoo:supabase-blocked'))
+      } catch {}
+      return { rate: 4500, taxPercent: 0, serviceFeePercent: 0, lastSyncedAt: null }
+    }
+    if (!data) return { rate: 4500, taxPercent: 0, serviceFeePercent: 0, lastSyncedAt: null }
 
     const rateRow = data.find((r) => r.key === 'usd_to_mmk_rate')
     const syncRow = data.find((r) => r.key === 'last_auto_sync_at')
@@ -677,6 +683,9 @@ export async function getExchangeRateSettings() {
       lastSyncedAt: syncRow ? syncRow.value : null,
     }
   } catch (err) {
+    try {
+      window.dispatchEvent(new CustomEvent('toodleoo:supabase-blocked'))
+    } catch {}
     console.warn('Error fetching exchange rate settings:', err)
     return { rate: 4500, taxPercent: 0, serviceFeePercent: 0, lastSyncedAt: null }
   }

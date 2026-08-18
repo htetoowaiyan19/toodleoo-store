@@ -1,25 +1,100 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from '../../utils/useTranslation'
-import { ShieldAlert, RotateCw, Globe, ExternalLink, Zap } from 'lucide-react'
+import { checkSupabaseHealth } from '../../utils/supabaseHealth'
+import { ShieldAlert, RotateCw, Globe, ExternalLink, Zap, AlertTriangle } from 'lucide-react'
 
-export function SupabaseConnectionAlertModal({ isBlocked, onRetry }) {
+export function SupabaseConnectionAlertModal({ isBlocked: propBlocked, onRetry }) {
   const { t, language, setLanguage } = useTranslation()
+  const [internalBlocked, setInternalBlocked] = useState(false)
   const [retrying, setRetrying] = useState(false)
+  const [retryFailedMsg, setRetryFailedMsg] = useState('')
+
+  const isBlocked = propBlocked || internalBlocked
+
+  // Initial fast health check on mount
+  useEffect(() => {
+    let active = true
+
+    async function runCheck() {
+      const result = await checkSupabaseHealth(3500)
+      if (active && !result.ok) {
+        setInternalBlocked(true)
+      }
+    }
+
+    runCheck()
+
+    // Global custom event listener
+    function handleBlockedEvent() {
+      setInternalBlocked(true)
+    }
+
+    // Global network error & unhandled rejection listeners
+    function handleWindowError(event) {
+      const targetStr = String(event?.message || event?.filename || event?.target?.src || '')
+      if (
+        targetStr.includes('supabase.co') ||
+        targetStr.includes('ERR_CONNECTION_TIMED_OUT') ||
+        targetStr.includes('ERR_NAME_NOT_RESOLVED') ||
+        targetStr.includes('ERR_CONNECTION_REFUSED')
+      ) {
+        setInternalBlocked(true)
+      }
+    }
+
+    function handleUnhandledRejection(event) {
+      const reasonStr = String(event?.reason?.message || event?.reason || '')
+      if (
+        reasonStr.includes('supabase.co') ||
+        reasonStr.includes('Failed to fetch') ||
+        reasonStr.includes('ERR_CONNECTION_TIMED_OUT') ||
+        reasonStr.includes('NetworkError') ||
+        reasonStr.includes('Network request failed')
+      ) {
+        setInternalBlocked(true)
+      }
+    }
+
+    window.addEventListener('toodleoo:supabase-blocked', handleBlockedEvent)
+    window.addEventListener('error', handleWindowError, true)
+    window.addEventListener('unhandledrejection', handleUnhandledRejection)
+
+    return () => {
+      active = false
+      window.removeEventListener('toodleoo:supabase-blocked', handleBlockedEvent)
+      window.removeEventListener('error', handleWindowError, true)
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection)
+    }
+  }, [])
+
+  const handleRetry = useCallback(async () => {
+    setRetrying(true)
+    setRetryFailedMsg('')
+
+    const health = await checkSupabaseHealth(4000)
+
+    if (health.ok) {
+      setInternalBlocked(false)
+      if (onRetry) {
+        await onRetry()
+      } else {
+        window.location.reload()
+      }
+      setRetrying(false)
+    } else {
+      setRetrying(false)
+      setRetryFailedMsg(
+        language === 'my'
+          ? 'ဆာဗာနှင့် ချိတ်ဆက်၍ မရသေးပါ။ ကျေးဇူးပြု၍ VPN ဖွင့်ထားခြင်း ရှိမရှိ စစ်ဆေးပါ။'
+          : 'Still unable to connect to server. Please verify your VPN is enabled and try again.',
+      )
+    }
+  }, [language, onRetry])
 
   if (!isBlocked) return null
 
-  async function handleRetry() {
-    setRetrying(true)
-    if (onRetry) {
-      await onRetry()
-    } else {
-      window.location.reload()
-    }
-    setTimeout(() => setRetrying(false), 1000)
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md animate-fade-in">
       <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-red-500/30 bg-white p-6 shadow-2xl transition-all dark:border-red-500/30 dark:bg-neutral-900 sm:p-8 text-center">
         {/* Glow Ambient Red/Orange Warning Blobs */}
         <div className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-red-500/20 blur-3xl" />
@@ -44,18 +119,25 @@ export function SupabaseConnectionAlertModal({ isBlocked, onRetry }) {
           </div>
 
           {/* Recommended VPN list */}
-          <div className="rounded-xl border border-black/10 bg-neutral-50 p-3.5 text-xs font-medium text-neutral-700 dark:border-white/10 dark:bg-neutral-800/60 dark:text-neutral-300 space-y-1 text-left">
+          <div className="rounded-xl border border-black/10 bg-neutral-50 p-3.5 text-xs font-medium text-neutral-700 dark:border-white/10 dark:bg-neutral-800/60 dark:text-neutral-300 space-y-1.5 text-left">
             <p className="font-bold text-[#0b7e74] dark:text-[#67dccf]">
               {t('network.recommendedVpns')}
             </p>
-            <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-              • 1.1.1.1 (Cloudflare WARP) — Free, Fast & Easy
+            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
+              • <strong>1.1.1.1 (Cloudflare WARP)</strong> — Free, Fast & Easy
               <br />
-              • ProtonVPN — Free tier with strong bypass
+              • <strong>ProtonVPN</strong> — Free tier with strong bypass
               <br />
-              • Windscribe / SuperVPN / v2ray
+              • <strong>Windscribe / SuperVPN / v2ray</strong>
             </p>
           </div>
+
+          {retryFailedMsg && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-semibold text-amber-700 dark:text-amber-300 text-left">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>{retryFailedMsg}</span>
+            </div>
+          )}
 
           {/* Controls */}
           <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">

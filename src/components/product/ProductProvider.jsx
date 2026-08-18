@@ -189,25 +189,32 @@ export function ProductProvider({ children }) {
     const feeToUse = activeFee ?? settingsRef.current.serviceFeePercent
 
     try {
-      const { data, error } = await supabase
+      let timeoutId
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Failed to fetch: timeout')), 3500)
+      })
+
+      const queryPromise = supabase
         .from('products')
         .select('*, items(*)')
         .order('updated_at', { ascending: false })
 
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]).finally(() => clearTimeout(timeoutId))
+
       if (error) {
-        const errMsg = error?.message || String(error)
-        if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('fetch failed')) {
-          setIsSupabaseBlocked(true)
-        }
+        setIsSupabaseBlocked(true)
+        try {
+          window.dispatchEvent(new CustomEvent('toodleoo:supabase-blocked'))
+        } catch {}
       } else if (Array.isArray(data)) {
         setIsSupabaseBlocked(false)
         setProducts(data.map((p) => normalizeProduct(p, rateToUse, taxToUse, feeToUse)))
       }
     } catch (err) {
-      const errMsg = err?.message || String(err)
-      if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('fetch failed')) {
-        setIsSupabaseBlocked(true)
-      }
+      setIsSupabaseBlocked(true)
+      try {
+        window.dispatchEvent(new CustomEvent('toodleoo:supabase-blocked'))
+      } catch {}
     } finally {
       setLoading(false)
     }
