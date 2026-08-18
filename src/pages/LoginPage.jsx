@@ -3,37 +3,37 @@ import { Navigate } from 'react-router'
 import { useAuth } from '../utils/useAuth'
 import { useTranslation } from '../utils/useTranslation'
 
-function formatAuthError(error) {
+function formatAuthError(error, t) {
   if (!error) return ''
   const message = error.message || String(error)
   const lower = message.toLowerCase()
 
   if (lower.includes('invalid login credentials')) {
-    return 'Incorrect email or password. Please check your credentials and try again.'
+    return t('auth.errors.invalidCredentials')
   }
   if (lower.includes('user not found') || lower.includes('email not found')) {
-    return 'No account found with this email address.'
+    return t('auth.errors.userNotFound')
   }
   if (lower.includes('invalid password') || lower.includes('wrong password')) {
-    return 'Incorrect password. Please check your password and try again.'
+    return t('auth.errors.wrongPassword')
   }
   if (
     lower.includes('user already registered') ||
     lower.includes('already exists')
   ) {
-    return 'An account with this email address already exists. Try signing in instead.'
+    return t('auth.errors.alreadyRegistered')
   }
   if (lower.includes('password should be at least')) {
-    return 'Password must be at least 6 characters long.'
+    return t('auth.errors.passwordTooShort')
   }
   if (lower.includes('email not confirmed')) {
-    return 'Please confirm your email address before signing in.'
+    return t('auth.errors.emailNotConfirmed')
   }
   if (lower.includes('rate limit') || lower.includes('too many requests')) {
-    return 'Too many attempts. Please wait a moment and try again.'
+    return t('auth.errors.rateLimit')
   }
 
-  return message
+  return t('auth.errors.generic') || message
 }
 
 export function LoginPage() {
@@ -58,7 +58,7 @@ export function LoginPage() {
         await signInWithPassword(form.email, form.password)
       }
     } catch (caughtError) {
-      setError(formatAuthError(caughtError))
+      setError(formatAuthError(caughtError, t))
     } finally {
       setIsSubmitting(false)
     }
@@ -70,7 +70,7 @@ export function LoginPage() {
     try {
       await signInWithGoogle()
     } catch (caughtError) {
-      setError(formatAuthError(caughtError))
+      setError(formatAuthError(caughtError, t))
       setIsSubmitting(false)
     }
   }
@@ -79,9 +79,11 @@ export function LoginPage() {
     <section className="mx-auto grid max-w-5xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-2 lg:px-8">
       <div>
         <p className="font-bold text-[#0b7e74]">{t('auth.secureAccount')}</p>
-        <h1 className="mt-2 text-4xl font-black">{t('auth.signInTitle')}</h1>
-        <p className="mt-4 text-neutral-600 dark:text-white/60">
-          {t('auth.signInSubtitle')}
+        <h1 className="mt-2 text-3xl sm:text-4xl font-black">
+          {isSignup ? t('auth.signUpTitle') : t('auth.signInTitle')}
+        </h1>
+        <p className="mt-4 text-xs sm:text-sm text-neutral-600 dark:text-white/60 leading-relaxed">
+          {isSignup ? t('auth.signUpSubtitle') : t('auth.signInSubtitle')}
         </p>
       </div>
       <form
@@ -89,29 +91,31 @@ export function LoginPage() {
         className="rounded-xl border border-black/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-neutral-900"
       >
         {isSignup && (
-          <label className="block text-sm font-bold">
+          <label className="block text-xs sm:text-sm font-bold">
             {t('auth.name')}
             <input
               value={form.displayName}
               onChange={(event) =>
                 setForm({ ...form, displayName: event.target.value })
               }
-              className="mt-2 w-full rounded-lg border border-black/10 px-3 py-3 outline-none transition-colors focus:border-[#0b7e74] dark:border-white/10 dark:bg-neutral-950 dark:focus:border-[#0b7e74]"
+              placeholder={t('auth.namePlaceholder')}
+              className="mt-2 w-full rounded-lg border border-black/10 px-3.5 py-2.5 text-xs sm:text-sm outline-none transition-colors focus:border-[#0b7e74] dark:border-white/10 dark:bg-neutral-950 dark:focus:border-[#0b7e74]"
               required
             />
           </label>
         )}
-        <label className={`${isSignup ? 'mt-4' : ''} block text-sm font-bold`}>
+        <label className={`${isSignup ? 'mt-4' : ''} block text-xs sm:text-sm font-bold`}>
           {t('auth.email')}
           <input
             type="email"
             value={form.email}
             onChange={(event) => setForm({ ...form, email: event.target.value })}
-            className="mt-2 w-full rounded-lg border border-black/10 px-3 py-3 outline-none transition-colors focus:border-[#0b7e74] dark:border-white/10 dark:bg-neutral-950 dark:focus:border-[#0b7e74]"
+            placeholder={t('auth.emailPlaceholder')}
+            className="mt-2 w-full rounded-lg border border-black/10 px-3.5 py-2.5 text-xs sm:text-sm outline-none transition-colors focus:border-[#0b7e74] dark:border-white/10 dark:bg-neutral-950 dark:focus:border-[#0b7e74]"
             required
           />
         </label>
-        <label className="mt-4 block text-sm font-bold">
+        <label className="mt-4 block text-xs sm:text-sm font-bold">
           {t('auth.password')}
           <input
             type="password"
@@ -119,7 +123,8 @@ export function LoginPage() {
             onChange={(event) =>
               setForm({ ...form, password: event.target.value })
             }
-            className="mt-2 w-full rounded-lg border border-black/10 px-3 py-3 outline-none transition-colors focus:border-[#0b7e74] dark:border-white/10 dark:bg-neutral-950 dark:focus:border-[#0b7e74]"
+            placeholder={t('auth.passwordPlaceholder')}
+            className="mt-2 w-full rounded-lg border border-black/10 px-3.5 py-2.5 text-xs sm:text-sm outline-none transition-colors focus:border-[#0b7e74] dark:border-white/10 dark:bg-neutral-950 dark:focus:border-[#0b7e74]"
             required
           />
         </label>
@@ -139,7 +144,7 @@ export function LoginPage() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="mt-6 w-full cursor-pointer rounded-lg bg-neutral-950 px-5 py-3 font-bold text-white transition-all duration-200 hover:bg-neutral-800 hover:shadow-sm active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 text-sm"
+          className="mt-6 w-full cursor-pointer rounded-lg bg-[#0b7e74] px-5 py-3 font-bold text-white transition-all duration-200 hover:bg-[#09665e] hover:shadow-sm active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 text-xs sm:text-sm"
         >
           {isSubmitting
             ? t('common.loading')
@@ -152,7 +157,7 @@ export function LoginPage() {
           type="button"
           disabled={isSubmitting}
           onClick={handleGoogleSignIn}
-          className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-black/10 px-5 py-2.5 font-bold transition-all duration-200 hover:border-black/30 hover:bg-neutral-100 hover:shadow-sm active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:hover:border-white/30 dark:hover:bg-neutral-800 text-sm"
+          className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-black/10 px-5 py-2.5 font-bold transition-all duration-200 hover:border-black/30 hover:bg-neutral-100 hover:shadow-sm active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:hover:border-white/30 dark:hover:bg-neutral-800 text-xs sm:text-sm"
         >
           <svg className="h-4 w-4" viewBox="0 0 24 24">
             <path
@@ -182,7 +187,7 @@ export function LoginPage() {
               setError('')
               setIsSignup((value) => !value)
             }}
-            className="cursor-pointer font-bold text-[#0b7e74] transition-colors hover:text-[#09665e] hover:underline"
+            className="cursor-pointer font-bold text-xs sm:text-sm text-[#0b7e74] transition-colors hover:text-[#09665e] hover:underline"
           >
             {isSignup ? t('auth.alreadyHaveAccount') : t('auth.createAccountLink')}
           </button>

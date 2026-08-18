@@ -2,8 +2,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link, NavLink, useLocation } from 'react-router'
 import { useCart } from '../../utils/useCart'
 import { useAuth } from '../../utils/useAuth'
+import { useProducts } from '../../utils/useProducts'
 import { useTranslation } from '../../utils/useTranslation'
 import { GlobalSearch } from '../product/GlobalSearch'
+import { ImageErrorWarningBanner } from '../common/ImageErrorWarningBanner'
+import { FirstVisitLanguageModal } from '../language/FirstVisitLanguageModal'
+import { SupabaseConnectionAlertModal } from '../common/SupabaseConnectionAlertModal'
 import { formatCurrency } from '../../utils/format'
 import logoImage from '../../assets/logo/logo_toodleoo-nobg.png'
 import {
@@ -27,6 +31,7 @@ import { getUserSubscription } from '../../utils/subscriptionPlans'
 export function Layout({ children, onCartOpen }) {
   const { count } = useCart()
   const { isAdmin, profile, user, refreshProfile } = useAuth()
+  const { isSupabaseBlocked, retrySupabaseConnection } = useProducts()
   const { t } = useTranslation()
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isRefreshingWallet, setIsRefreshingWallet] = useState(false)
@@ -62,6 +67,18 @@ export function Layout({ children, onCartOpen }) {
 
   return (
     <div className="min-h-screen bg-[#f7fbfa] pb-20 md:pb-0 text-neutral-950 transition-colors dark:bg-neutral-950 dark:text-white">
+      {/* IMAGE ERROR WARNING BANNER */}
+      <ImageErrorWarningBanner />
+
+      {/* FIRST-TIME VISITOR LANGUAGE SELECTION PROMPT MODAL */}
+      <FirstVisitLanguageModal />
+
+      {/* SUPABASE CONNECTION BLOCKED / VPN FORCED MODAL */}
+      <SupabaseConnectionAlertModal
+        isBlocked={isSupabaseBlocked}
+        onRetry={retrySupabaseConnection}
+      />
+
       {/* STANDARD HEADER */}
       <header className="sticky top-0 z-30 px-2.5 py-2 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-1.5 sm:gap-2.5 rounded-full border border-black/10 bg-white/85 px-3 py-1.5 sm:px-5 sm:py-2 shadow-lg shadow-black/5 backdrop-blur-xl transition-colors dark:border-white/10 dark:bg-neutral-900/85 dark:shadow-black/30">

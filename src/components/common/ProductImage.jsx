@@ -32,6 +32,13 @@ export function ProductImage({
       : name.slice(0, 2)
     ).toUpperCase() || 'TD'
 
+  function handleImageError() {
+    setHasError(true)
+    try {
+      window.dispatchEvent(new CustomEvent('toodleoo:image-load-failed', { detail: { src: fullUrl } }))
+    } catch {}
+  }
+
   if (!fullUrl || hasError) {
     return <span className={fallbackClassName}>{fallbackInitials}</span>
   }
@@ -40,7 +47,7 @@ export function ProductImage({
     <img
       src={fullUrl}
       alt={name || 'Product'}
-      onError={() => setHasError(true)}
+      onError={handleImageError}
       className={className}
     />
   )

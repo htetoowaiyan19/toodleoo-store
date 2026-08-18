@@ -151,6 +151,7 @@ export function ProductProvider({ children }) {
   const [taxPercent, setTaxPercent] = useState(0)
   const [serviceFeePercent, setServiceFeePercent] = useState(0)
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
+  const [isSupabaseBlocked, setIsSupabaseBlocked] = useState(false)
   const [products, setProducts] = useState(() =>
     fallbackProducts.map((p) => normalizeFallback(p, 4500, 0, 0)),
   )
@@ -159,18 +160,27 @@ export function ProductProvider({ children }) {
   const settingsRef = useRef({ rate: 4500, taxPercent: 0, serviceFeePercent: 0 })
 
   const loadExchangeRate = useCallback(async () => {
-    const settings = await getExchangeRateSettings()
-    const rate = settings.rate || 4500
-    const tax = settings.taxPercent || 0
-    const fee = settings.serviceFeePercent || 0
+    try {
+      const settings = await getExchangeRateSettings()
+      const rate = settings.rate || 4500
+      const tax = settings.taxPercent || 0
+      const fee = settings.serviceFeePercent || 0
 
-    setExchangeRate(rate)
-    setTaxPercent(tax)
-    setServiceFeePercent(fee)
-    if (settings.lastSyncedAt) setLastSyncedAt(settings.lastSyncedAt)
+      setExchangeRate(rate)
+      setTaxPercent(tax)
+      setServiceFeePercent(fee)
+      if (settings.lastSyncedAt) setLastSyncedAt(settings.lastSyncedAt)
 
-    settingsRef.current = { rate, taxPercent: tax, serviceFeePercent: fee }
-    return settingsRef.current
+      settingsRef.current = { rate, taxPercent: tax, serviceFeePercent: fee }
+      setIsSupabaseBlocked(false)
+      return settingsRef.current
+    } catch (err) {
+      const errMsg = err?.message || String(err)
+      if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('fetch failed')) {
+        setIsSupabaseBlocked(true)
+      }
+      return settingsRef.current
+    }
   }, [])
 
   const fetchAndNormalizeProducts = useCallback(async (activeRate, activeTax, activeFee) => {
@@ -178,15 +188,29 @@ export function ProductProvider({ children }) {
     const taxToUse = activeTax ?? settingsRef.current.taxPercent
     const feeToUse = activeFee ?? settingsRef.current.serviceFeePercent
 
-    const { data, error } = await supabase
-      .from('products')
-      .select('*, items(*)')
-      .order('updated_at', { ascending: false })
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*, items(*)')
+        .order('updated_at', { ascending: false })
 
-    if (!error && Array.isArray(data)) {
-      setProducts(data.map((p) => normalizeProduct(p, rateToUse, taxToUse, feeToUse)))
+      if (error) {
+        const errMsg = error?.message || String(error)
+        if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('fetch failed')) {
+          setIsSupabaseBlocked(true)
+        }
+      } else if (Array.isArray(data)) {
+        setIsSupabaseBlocked(false)
+        setProducts(data.map((p) => normalizeProduct(p, rateToUse, taxToUse, feeToUse)))
+      }
+    } catch (err) {
+      const errMsg = err?.message || String(err)
+      if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('fetch failed')) {
+        setIsSupabaseBlocked(true)
+      }
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -281,6 +305,11 @@ export function ProductProvider({ children }) {
       return freshRate
     }
 
+    const retrySupabaseConnection = async () => {
+      const settings = await loadExchangeRate()
+      await fetchAndNormalizeProducts(settings.rate, settings.taxPercent, settings.serviceFeePercent)
+    }
+
     return {
       tags,
       types,
@@ -289,6 +318,8 @@ export function ProductProvider({ children }) {
       platforms,
       loading,
       products,
+      isSupabaseBlocked,
+      retrySupabaseConnection,
       maxProductPrice,
       exchangeRate,
       taxPercent,
@@ -302,7 +333,7 @@ export function ProductProvider({ children }) {
       triggerMarketRateSync,
       updateFees,
     }
-  }, [loading, products, maxProductPrice, exchangeRate, taxPercent, serviceFeePercent, lastSyncedAt, convertUsdToMmk, formatCurrency, formatUsdToMmk, formatPriceRange, loadExchangeRate, fetchAndNormalizeProducts, updateFees])
+  }, [loading, products, isSupabaseBlocked, maxProductPrice, exchangeRate, taxPercent, serviceFeePercent, lastSyncedAt, convertUsdToMmk, formatCurrency, formatUsdToMmk, formatPriceRange, loadExchangeRate, fetchAndNormalizeProducts, updateFees])
 
 
 
